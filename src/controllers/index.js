@@ -5,6 +5,8 @@ const postController = require('./post.controller')
 const feedController = require('./feed.controller')
 const referralController = require('./referral.controller')
 const mediaController = require('./media.controller')
+const contactController = require('./contact.controller')
+const ratingController = require('./rating.controller')
 
 module.exports = {
   authController,
@@ -14,4 +16,6 @@ module.exports = {
   feedController,
   referralController,
   mediaController,
+  contactController,
+  ratingController,
 }
