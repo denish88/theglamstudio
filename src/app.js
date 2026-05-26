@@ -13,7 +13,54 @@ const { errorHandler, cryptoMiddleware } = require('./middlewares')
 
 const app = express()
 
-app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
+// app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'"
+        ],
+
+        styleSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "https:"
+        ],
+
+        imgSrc: [
+          "'self'",
+          "data:",
+          "blob:",
+          "https://*.r2.cloudflarestorage.com",
+          "https://images.unsplash.com",
+          "https://plus.unsplash.com",
+          "https://cdn.theglamstudio.bond"
+        ],
+
+        connectSrc: [
+          "'self'",
+          "https://*.r2.cloudflarestorage.com",
+          "https://images.unsplash.com",
+          "https://plus.unsplash.com",
+          "https://cdn.theglamstudio.bond"
+        ],
+
+        fontSrc: [
+          "'self'",
+          "https:",
+          "data:"
+        ]
+      }
+    }
+  })
+)
 app.use(cors(corsOptions))
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
