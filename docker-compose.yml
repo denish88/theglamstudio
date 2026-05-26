@@ -1,0 +1,13 @@
+services:
+  theglam_backend:
+    container_name: theglam_backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - ./env/.env.prod
+    ports:
+      - "4008:3000"
+    volumes:
+      - ./public:/app/public:ro
+    restart: always
