@@ -103,6 +103,9 @@ const userSchema = new mongoose.Schema(
   },
 )
 
+userSchema.index({ deletedAt: 1, isActive: 1, createdAt: -1 })
+userSchema.index({ referredBy: 1 })
+
 userSchema.pre('save', async function () {
   if (!this.isModified('password')) return
   this.password = await bcrypt.hash(this.password, 12)

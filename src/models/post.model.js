@@ -52,6 +52,10 @@ const postSchema = new mongoose.Schema(
   },
 )
 
+postSchema.index({ deletedAt: 1, isActive: 1, category: 1, _id: -1 })
+postSchema.index({ directory: 1, deletedAt: 1 })
+postSchema.index({ deletedAt: 1, createdAt: -1 })
+
 postSchema.pre('save', function () {
   this.isMultiImage = this.imageUrl.length > 1
 })

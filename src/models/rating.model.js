@@ -26,7 +26,7 @@ const ratingSchema = new mongoose.Schema(
 )
 
 ratingSchema.index({ userId: 1, createdAt: -1 })
-ratingSchema.index({ createdAt: -1 })
+ratingSchema.index({ rating: 1, createdAt: -1 })
 
 const Rating = mongoose.model('Rating', ratingSchema)
 

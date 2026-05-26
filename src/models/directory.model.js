@@ -28,6 +28,8 @@ const directorySchema = new mongoose.Schema(
   },
 )
 
+directorySchema.index({ deletedAt: 1, createdAt: -1 })
+
 const Directory = mongoose.model('Directory', directorySchema)
 
 module.exports = Directory
