@@ -7,6 +7,7 @@ const referralController = require('./referral.controller')
 const mediaController = require('./media.controller')
 const contactController = require('./contact.controller')
 const ratingController = require('./rating.controller')
+const pollController = require('./poll.controller')
 
 module.exports = {
   authController,
@@ -18,4 +19,5 @@ module.exports = {
   mediaController,
   contactController,
   ratingController,
+  pollController,
 }

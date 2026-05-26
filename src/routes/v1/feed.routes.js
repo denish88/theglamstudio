@@ -1,5 +1,5 @@
 const router = require('express').Router()
-const { feedController, referralController, contactController, ratingController } = require('../../controllers')
+const { feedController, referralController, contactController, ratingController, pollController } = require('../../controllers')
 const { authenticate } = require('../../middlewares')
 
 router.use(authenticate)
@@ -15,5 +15,8 @@ router.post('/contact', contactController.submitContact)
 
 router.post('/ratings', ratingController.submitRating)
 router.get('/ratings/my', ratingController.getMyRatings)
+
+router.get('/polls', pollController.getActivePolls)
+router.post('/polls/:id/vote', pollController.votePoll)
 
 module.exports = router

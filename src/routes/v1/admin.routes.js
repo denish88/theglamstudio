@@ -1,5 +1,5 @@
 const router = require('express').Router()
-const { userController, directoryController, postController, contactController, ratingController } = require('../../controllers')
+const { userController, directoryController, postController, contactController, ratingController, pollController } = require('../../controllers')
 const { authenticate, adminOnly, upload } = require('../../middlewares')
 
 router.use(authenticate, adminOnly)
@@ -35,5 +35,12 @@ router.delete('/contacts/:id', contactController.deleteContact)
 // ── Ratings ──
 router.get('/ratings', ratingController.listAllRatings)
 router.delete('/ratings/:id', ratingController.deleteRating)
+
+// ── Polls ──
+router.post('/polls', pollController.createPoll)
+router.get('/polls', pollController.listPolls)
+router.get('/polls/:id/results', pollController.getPollResults)
+router.patch('/polls/:id/toggle-active', pollController.togglePollActive)
+router.delete('/polls/:id', pollController.deletePoll)
 
 module.exports = router
