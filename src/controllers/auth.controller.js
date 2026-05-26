@@ -1,5 +1,5 @@
 const { User } = require('../models')
-const { ApiError, ApiResponse, generateAccessToken, generateRefreshToken, verifyToken } = require('../utils')
+const { ApiError, ApiResponse, generateAccessToken, generateRefreshToken, verifyToken, setMediaCookie, clearMediaCookie } = require('../utils')
 const crypto = require('crypto')
 
 function generateDeviceKeyID() {
@@ -44,6 +44,8 @@ const login = async (req, res, next) => {
     user.addLoginActivity(ipAddress, browserFingerprint)
     await user.save({ validateBeforeSave: false })
 
+    setMediaCookie(res, accessToken)
+
     ApiResponse.success(res, {
       ...user.toSafeObject(),
       deviceKeyID,
@@ -61,6 +63,8 @@ const logout = async (req, res, next) => {
       refreshToken: null,
       deviceId: null,
     })
+
+    clearMediaCookie(res)
 
     ApiResponse.success(res, {}, 'Logged out successfully')
   } catch (error) {
@@ -109,6 +113,8 @@ const refreshAccessToken = async (req, res, next) => {
     }
 
     const newAccessToken = generateAccessToken(user._id, user.deviceId)
+
+    setMediaCookie(res, newAccessToken)
 
     ApiResponse.success(res, { authToken: newAccessToken }, 'Token refreshed')
   } catch (error) {

@@ -1,6 +1,6 @@
 const { v4: uuidv4 } = require('uuid')
 const { Post, Directory } = require('../models')
-const { ApiError, ApiResponse, uploadToR2, deleteFromR2, generateSignedUrls, buildR2Key, optimizeImage } = require('../utils')
+const { ApiError, ApiResponse, uploadToR2, deleteFromR2, buildMediaUrls, generateSignedUrls, buildR2Key, optimizeImage } = require('../utils')
 
 async function processAndUploadImages(files) {
   const uploadPromises = files.map(async (file) => {
@@ -50,9 +50,8 @@ const createPost = async (req, res, next) => {
     dir.totalPictures = await Post.countDocuments({ directory: dir._id, deletedAt: null })
     await dir.save()
 
-    const signedUrls = await generateSignedUrls(uploadedKeys)
     const postObj = post.toObject()
-    postObj.imageUrl = signedUrls
+    postObj.imageUrl = await generateSignedUrls(uploadedKeys)
 
     ApiResponse.created(res, postObj, 'Post created')
   } catch (error) {

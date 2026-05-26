@@ -30,20 +30,14 @@ async function deleteFromR2(key) {
   }
 }
 
-async function generateSignedImageUrl(key) {
+function buildMediaUrl(key) {
   if (!key) return null
-
-  const command = new GetObjectCommand({
-    Bucket: R2_BUCKET,
-    Key: key,
-  })
-
-  return getSignedUrl(r2Client, command, { expiresIn: SIGNED_URL_EXPIRY })
+  return `/api/v1/media/${key}`
 }
 
-async function generateSignedUrls(keys) {
+function buildMediaUrls(keys) {
   if (!keys || keys.length === 0) return []
-  return Promise.all(keys.map((key) => generateSignedImageUrl(key)))
+  return keys.map((key) => buildMediaUrl(key))
 }
 
 function buildR2Key(filename) {
@@ -53,10 +47,23 @@ function buildR2Key(filename) {
   return `posts/${year}/${month}/${filename}`
 }
 
+async function generateSignedImageUrl(key) {
+  if (!key) return null
+  const command = new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
+  return getSignedUrl(r2Client, command, { expiresIn: SIGNED_URL_EXPIRY })
+}
+
+async function generateSignedUrls(keys) {
+  if (!keys || keys.length === 0) return []
+  return Promise.all(keys.map((key) => generateSignedImageUrl(key)))
+}
+
 module.exports = {
   uploadToR2,
   deleteFromR2,
+  buildMediaUrl,
+  buildMediaUrls,
+  buildR2Key,
   generateSignedImageUrl,
   generateSignedUrls,
-  buildR2Key,
 }

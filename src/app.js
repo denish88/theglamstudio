@@ -3,6 +3,7 @@ const cors = require('cors')
 const helmet = require('helmet')
 const morgan = require('morgan')
 const rateLimit = require('express-rate-limit')
+const cookieParser = require('cookie-parser')
 const path = require('path')
 const fs = require('fs')
 
@@ -38,18 +39,15 @@ app.use(
           "'self'",
           "data:",
           "blob:",
-          "https://*.r2.cloudflarestorage.com",
           "https://images.unsplash.com",
           "https://plus.unsplash.com",
-          "https://cdn.theglamstudio.bond"
+          "https://*.r2.cloudflarestorage.com"
         ],
 
         connectSrc: [
           "'self'",
-          "https://*.r2.cloudflarestorage.com",
           "https://images.unsplash.com",
-          "https://plus.unsplash.com",
-          "https://cdn.theglamstudio.bond"
+          "https://plus.unsplash.com"
         ],
 
         fontSrc: [
@@ -62,6 +60,7 @@ app.use(
   })
 )
 app.use(cors(corsOptions))
+app.use(cookieParser())
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 
@@ -71,14 +70,24 @@ if (NODE_ENV === 'development') {
   app.use(morgan('combined'))
 }
 
-const limiter = rateLimit({
+const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { statusCode: 429, status: 0, message: 'Too many requests, please try again later', data: [], metadata: [] },
 })
-app.use('/api/', limiter)
+
+const mediaLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { statusCode: 429, status: 0, message: 'Too many requests', data: [], metadata: [] },
+})
+
+app.use('/api/v1/media', mediaLimiter)
+app.use('/api/', apiLimiter)
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', environment: NODE_ENV })

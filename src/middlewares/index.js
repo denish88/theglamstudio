@@ -4,6 +4,7 @@ const errorHandler = require('./error.middleware')
 const validate = require('./validate.middleware')
 const upload = require('./upload.middleware')
 const cryptoMiddleware = require('./crypto.middleware')
+const antiHotlink = require('./antiHotlink.middleware')
 
 module.exports = {
   authenticate,
@@ -12,4 +13,5 @@ module.exports = {
   validate,
   upload,
   cryptoMiddleware,
+  antiHotlink,
 }

@@ -1,5 +1,5 @@
 const { Post, Like } = require('../models')
-const { ApiError, ApiResponse, generateSignedUrls } = require('../utils')
+const { ApiError, ApiResponse, buildMediaUrls } = require('../utils')
 
 const getPosts = async (req, res, next) => {
   try {
@@ -37,18 +37,16 @@ const getPosts = async (req, res, next) => {
 
     const likedSet = new Set(userLikes.map((l) => l.post.toString()))
 
-    const postsWithSignedUrls = await Promise.all(
-      posts.map(async (p) => ({
-        ...p,
-        imageUrl: await generateSignedUrls(p.imageUrl),
-        isLiked: likedSet.has(p._id.toString()),
-      })),
-    )
+    const postsWithProxyUrls = posts.map((p) => ({
+      ...p,
+      imageUrl: buildMediaUrls(p.imageUrl),
+      isLiked: likedSet.has(p._id.toString()),
+    }))
 
     const nextCursor = posts.length > 0 ? posts[posts.length - 1]._id : null
 
     ApiResponse.success(res, {
-      posts: postsWithSignedUrls,
+      posts: postsWithProxyUrls,
       pagination: {
         nextCursor: hasMore ? nextCursor : null,
         hasMore,
@@ -78,7 +76,7 @@ const getPostById = async (req, res, next) => {
 
     const liked = await Like.exists({ user: userId, post: post._id })
     post.isLiked = !!liked
-    post.imageUrl = await generateSignedUrls(post.imageUrl)
+    post.imageUrl = buildMediaUrls(post.imageUrl)
 
     ApiResponse.success(res, post)
   } catch (error) {
