@@ -14,10 +14,12 @@ const { errorHandler, cryptoMiddleware } = require('./middlewares')
 
 const app = express()
 
-// app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
+app.set('trust proxy', 1)
+
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 
     contentSecurityPolicy: {
       directives: {
