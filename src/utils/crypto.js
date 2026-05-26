@@ -53,4 +53,37 @@ function decrypt(encryptedBase64) {
   }
 }
 
-module.exports = { encrypt, decrypt }
+function encryptString(str) {
+  try {
+    const key = getDerivedKey()
+    const iv = crypto.randomBytes(IV_LENGTH)
+
+    const cipher = crypto.createCipheriv(ALGO, key, iv, { authTagLength: AUTH_TAG_LENGTH })
+    const encrypted = Buffer.concat([cipher.update(str, 'utf8'), cipher.final()])
+    const authTag = cipher.getAuthTag()
+
+    return Buffer.concat([iv, encrypted, authTag]).toString('base64')
+  } catch {
+    return null
+  }
+}
+
+function decryptString(encryptedBase64) {
+  try {
+    const key = getDerivedKey()
+    const combined = Buffer.from(encryptedBase64, 'base64')
+
+    const iv = combined.subarray(0, IV_LENGTH)
+    const authTag = combined.subarray(combined.length - AUTH_TAG_LENGTH)
+    const ciphertext = combined.subarray(IV_LENGTH, combined.length - AUTH_TAG_LENGTH)
+
+    const decipher = crypto.createDecipheriv(ALGO, key, iv, { authTagLength: AUTH_TAG_LENGTH })
+    decipher.setAuthTag(authTag)
+
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8')
+  } catch {
+    return null
+  }
+}
+
+module.exports = { encrypt, decrypt, encryptString, decryptString }

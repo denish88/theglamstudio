@@ -1,7 +1,7 @@
 const router = require('express').Router()
 const { mediaController } = require('../../controllers')
 const { antiHotlink } = require('../../middlewares')
-const { ApiError, verifyToken, COOKIE_NAME } = require('../../utils')
+const { ApiError, verifyToken, COOKIE_NAME, readMediaCookie } = require('../../utils')
 const { User } = require('../../models')
 
 const authenticateMedia = async (req, res, next) => {
@@ -9,7 +9,7 @@ const authenticateMedia = async (req, res, next) => {
     let token = null
 
     if (req.cookies && req.cookies[COOKIE_NAME]) {
-      token = req.cookies[COOKIE_NAME]
+      token = readMediaCookie(req.cookies[COOKIE_NAME])
     }
 
     if (!token) {

@@ -42,7 +42,7 @@ const streamMedia = async (req, res, next) => {
     res.set({
       'Content-Type': contentType,
       'Content-Length': contentLength,
-      'Cache-Control': 'private, no-cache',
+      'Cache-Control': 'private, max-age=7200, must-revalidate',
       'ETag': etag,
       'Vary': 'Cookie',
       'X-Content-Type-Options': 'nosniff',
