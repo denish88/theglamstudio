@@ -24,9 +24,9 @@ const postSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
-    isDownloadable: {
+    isWatermarked: {
       type: Boolean,
-      default: false,
+      default: true,
     },
     directory: {
       type: mongoose.Schema.Types.ObjectId,

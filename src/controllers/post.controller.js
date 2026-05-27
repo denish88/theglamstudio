@@ -18,7 +18,7 @@ const createPost = async (req, res, next) => {
   let uploadedKeys = []
 
   try {
-    const { caption, category, directory, isDownloadable } = req.body
+    const { caption, category, directory, isWatermarked } = req.body
 
     if (!req.files || req.files.length === 0) {
       throw ApiError.badRequest('At least one image is required')
@@ -44,7 +44,7 @@ const createPost = async (req, res, next) => {
       caption: caption || '',
       category: Number(category),
       directory: dir._id,
-      isDownloadable: isDownloadable === 'true' || isDownloadable === true,
+      isWatermarked: isWatermarked === 'true' || isWatermarked === true,
     })
 
     dir.totalPictures = await Post.countDocuments({ directory: dir._id, deletedAt: null })
@@ -136,12 +136,14 @@ const updatePost = async (req, res, next) => {
       throw ApiError.notFound('Post not found')
     }
 
-    const { caption, category, isActive, isDownloadable, directory } = req.body
+    const { caption, category, isActive, isWatermarked, directory } = req.body
 
     if (caption !== undefined) post.caption = caption
     if (category !== undefined) post.category = Number(category)
     if (isActive !== undefined) post.isActive = isActive
-    if (isDownloadable !== undefined) post.isDownloadable = isDownloadable
+    if (isWatermarked !== undefined) {
+      post.isWatermarked = isWatermarked === 'true' || isWatermarked === true
+    }
 
     if (directory) {
       const dir = await Directory.findOne({ _id: directory, deletedAt: null })
