@@ -24,16 +24,18 @@ const connectDB = require('./config/db')
 
 let isConnected = false
 
-const bootstrap = async () => {
+const connectDatabase = async () => {
   if (!isConnected) {
     await connectDB()
     isConnected = true
+    console.log('MongoDB connected')
   }
 }
 
-const handler = async (req, res) => {
-  await bootstrap()
-  return app(req, res)
-}
+module.exports.handler = async (req, res) => {
+  await connectDatabase()
 
-module.exports.handler = serverless(handler)
+  const handler = serverless(app)
+
+  return handler(req, res)
+}
