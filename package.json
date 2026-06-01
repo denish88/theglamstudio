@@ -3,9 +3,6 @@
   "version": "1.0.0",
   "description": "The Glam Club — Backend API Server",
   "main": "src/server.js",
-  "engines": {
-    "node": "20.x"
-  },
   "scripts": {
     "dev": "nodemon --config nodemon.json src/server.js",
     "start": "NODE_ENV=production node src/server.js",
