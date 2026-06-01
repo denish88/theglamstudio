@@ -24,22 +24,16 @@ const connectDB = require('./config/db')
 
 let isConnected = false
 
-const start = async (req, res) => {
-  try {
-    if (!isConnected) {
-      await connectDB()
-      isConnected = true
-    }
-
-    return app(req, res)
-  } catch (err) {
-    console.error(err)
-
-    return res.status(500).json({
-      success: false,
-      message: err.message
-    })
+const bootstrap = async () => {
+  if (!isConnected) {
+    await connectDB()
+    isConnected = true
   }
 }
 
-module.exports = serverless(start)
+const handler = async (req, res) => {
+  await bootstrap()
+  return app(req, res)
+}
+
+module.exports.handler = serverless(handler)

@@ -1,4 +1,3 @@
-const serverless = require('serverless-http')
 const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
@@ -99,8 +98,7 @@ app.get('/health', (req, res) => {
 app.use('/api', cryptoMiddleware, routes)
 
 // const CLIENT_BUILD = path.resolve(__dirname, '../public')
-const CLIENT_BUILD = path.join(__dirname, 'public')
-
+const CLIENT_BUILD = path.resolve(__dirname, '../public')
 
 if (fs.existsSync(CLIENT_BUILD)) {
   app.use(express.static(CLIENT_BUILD, { maxAge: '1y', immutable: true }))
@@ -120,5 +118,4 @@ if (fs.existsSync(CLIENT_BUILD)) {
 
 app.use(errorHandler)
 
-// module.exports = app
-module.exports = serverless(app)
+module.exports = app
