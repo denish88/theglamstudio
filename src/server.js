@@ -1,37 +1,17 @@
-// const app = require('./app')
-// const connectDB = require('./config/db')
-// const { PORT, NODE_ENV } = require('./config/env')
+const app = require('./app')
+const connectDB = require('./config/db')
+const { PORT, NODE_ENV } = require('./config/env')
 
-// const start = async () => {
-//   await connectDB()
+const start = async () => {
+  await connectDB()
 
-//   app.listen(PORT, () => {
-//     console.log(`Server running in ${NODE_ENV} mode on port ${PORT}`)
-//     console.log(`API base: http://localhost:${PORT}/api/v1`)
-//   })
-// }
-
-// start().catch((err) => {
-//   console.error('Failed to start server:', err)
-//   process.exit(1)
-// })
-
-
-const serverless = require('serverless-http')
-
-const app = require('../src/app')
-const connectDB = require('../src/config/db')
-
-let isConnected = false
-
-async function connectDatabase() {
-  if (!isConnected) {
-    await connectDB()
-    isConnected = true
-    console.log('MongoDB Connected')
-  }
+  app.listen(PORT, () => {
+    console.log(`Server running in ${NODE_ENV} mode on port ${PORT}`)
+    console.log(`API base: http://localhost:${PORT}/api/v1`)
+  })
 }
 
-connectDatabase()
-
-module.exports = serverless(app)
+start().catch((err) => {
+  console.error('Failed to start server:', err)
+  process.exit(1)
+})
