@@ -35,7 +35,7 @@ const cryptoMiddleware = (req, res, next) => {
     return originalJson(body)
   }
 
-  return next()
+  next()
 }
 
 module.exports = cryptoMiddleware
