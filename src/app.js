@@ -14,7 +14,7 @@ const { errorHandler, cryptoMiddleware } = require('./middlewares')
 
 const app = express()
 
-app.set('trust proxy', 1)
+// app.set('trust proxy', 1)
 
 // app.use(
 //   helmet({
@@ -66,11 +66,11 @@ app.use(cookieParser())
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 
-if (NODE_ENV === 'development') {
-  app.use(morgan('dev'))
-} else {
-  app.use(morgan('combined'))
-}
+// if (NODE_ENV === 'development') {
+//   app.use(morgan('dev'))
+// } else {
+//   app.use(morgan('combined'))
+// }
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -95,7 +95,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', environment: NODE_ENV })
 })
 
-app.use('/api', cryptoMiddleware, routes)
+// app.use('/api', cryptoMiddleware, routes)
 
 const CLIENT_BUILD = path.resolve(__dirname, '../public')
 
