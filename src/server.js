@@ -24,7 +24,7 @@ const connectDB = require('./config/db')
 
 let isConnected = false
 
-const connectDatabase = async () => {
+async function bootstrap() {
   if (!isConnected) {
     await connectDB()
     isConnected = true
@@ -32,10 +32,19 @@ const connectDatabase = async () => {
   }
 }
 
-module.exports.handler = async (req, res) => {
-  await connectDatabase()
+const handler = serverless(app)
 
-  const handler = serverless(app)
+module.exports = async (req, res) => {
+  try {
+    await bootstrap()
+    return handler(req, res)
+  } catch (err) {
+    console.error('SERVER ERROR:', err)
 
-  return handler(req, res)
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+      stack: err.stack
+    })
+  }
 }
