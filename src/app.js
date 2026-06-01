@@ -98,14 +98,20 @@ app.get('/health', (req, res) => {
 
 app.use('/api', cryptoMiddleware, routes)
 
-const CLIENT_BUILD = path.resolve(__dirname, '../public')
+// const CLIENT_BUILD = path.resolve(__dirname, '../public')
+const CLIENT_BUILD = path.join(__dirname, 'public')
+
 
 if (fs.existsSync(CLIENT_BUILD)) {
   app.use(express.static(CLIENT_BUILD, { maxAge: '1y', immutable: true }))
 
-  app.get('/{*splat}', (req, res) => {
-    res.sendFile(path.join(CLIENT_BUILD, 'index.html'))
-  })
+  // app.get('/{*splat}', (req, res) => {
+  //   res.sendFile(path.join(CLIENT_BUILD, 'index.html'))
+  // })
+
+  app.get('*', (req, res) => {
+  res.sendFile(path.join(CLIENT_BUILD, 'index.html'))
+})
 } else {
   app.use((req, res) => {
     res.status(404).json({ statusCode: 404, status: 0, message: 'Route not found', data: [], metadata: [] })
