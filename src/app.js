@@ -1,3 +1,4 @@
+const serverless = require('serverless-http')
 const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
@@ -113,4 +114,5 @@ if (fs.existsSync(CLIENT_BUILD)) {
 
 app.use(errorHandler)
 
-module.exports = app
+// module.exports = app
+module.exports = serverless(app)
