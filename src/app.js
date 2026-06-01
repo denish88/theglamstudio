@@ -95,7 +95,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', environment: NODE_ENV })
 })
 
-// app.use('/api', cryptoMiddleware, routes)
+app.use('/api', cryptoMiddleware, routes)
 
 // const CLIENT_BUILD = path.join(process.cwd(), 'public')
 
