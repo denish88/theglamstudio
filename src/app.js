@@ -4,8 +4,8 @@ const helmet = require('helmet')
 const morgan = require('morgan')
 const rateLimit = require('express-rate-limit')
 const cookieParser = require('cookie-parser')
-const path = require('path')
-const fs = require('fs')
+// const path = require('path')
+// const fs = require('fs')
 
 const { NODE_ENV } = require('./config/env')
 const corsOptions = require('./config/cors')
@@ -97,27 +97,27 @@ app.get('/health', (req, res) => {
 
 // app.use('/api', cryptoMiddleware, routes)
 
-const CLIENT_BUILD = path.join(process.cwd(), 'public')
+// const CLIENT_BUILD = path.join(process.cwd(), 'public')
 
-console.log('CLIENT_BUILD:', CLIENT_BUILD)
+// console.log('CLIENT_BUILD:', CLIENT_BUILD)
 
-if (fs.existsSync(CLIENT_BUILD)) {
-  app.use(express.static(CLIENT_BUILD))
+// if (fs.existsSync(CLIENT_BUILD)) {
+//   app.use(express.static(CLIENT_BUILD))
 
-  app.get('*', (req, res) => {
-    return res.sendFile(path.join(CLIENT_BUILD, 'index.html'))
-  })
-} else {
-  console.log('Public folder not found')
+//   app.get('*', (req, res) => {
+//     return res.sendFile(path.join(CLIENT_BUILD, 'index.html'))
+//   })
+// } else {
+//   console.log('Public folder not found')
 
-  app.use((req, res) => {
-    return res.status(404).json({
-      statusCode: 404,
-      status: 0,
-      message: 'Route not found',
-    })
-  })
-}
+//   app.use((req, res) => {
+//     return res.status(404).json({
+//       statusCode: 404,
+//       status: 0,
+//       message: 'Route not found',
+//     })
+//   })
+// }
 
 app.use(errorHandler)
 
