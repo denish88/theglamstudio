@@ -97,17 +97,25 @@ app.get('/health', (req, res) => {
 
 // app.use('/api', cryptoMiddleware, routes)
 
-const CLIENT_BUILD = path.resolve(__dirname, '../public')
+const CLIENT_BUILD = path.join(process.cwd(), 'public')
+
+console.log('CLIENT_BUILD:', CLIENT_BUILD)
 
 if (fs.existsSync(CLIENT_BUILD)) {
-  app.use(express.static(CLIENT_BUILD, { maxAge: '1y', immutable: true }))
+  app.use(express.static(CLIENT_BUILD))
 
-app.get('*', (req, res) => {
-  return res.sendFile(path.join(CLIENT_BUILD, 'index.html'))
-})
+  app.get('*', (req, res) => {
+    return res.sendFile(path.join(CLIENT_BUILD, 'index.html'))
+  })
 } else {
+  console.log('Public folder not found')
+
   app.use((req, res) => {
-    res.status(404).json({ statusCode: 404, status: 0, message: 'Route not found', data: [], metadata: [] })
+    return res.status(404).json({
+      statusCode: 404,
+      status: 0,
+      message: 'Route not found',
+    })
   })
 }
 
