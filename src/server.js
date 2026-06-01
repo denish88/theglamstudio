@@ -18,6 +18,20 @@
 
 
 const serverless = require('serverless-http')
-const app = require('./app')
+
+const app = require('../src/app')
+const connectDB = require('../src/config/db')
+
+let isConnected = false
+
+async function connectDatabase() {
+  if (!isConnected) {
+    await connectDB()
+    isConnected = true
+    console.log('MongoDB Connected')
+  }
+}
+
+connectDatabase()
 
 module.exports = serverless(app)
