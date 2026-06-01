@@ -18,33 +18,6 @@
 
 
 const serverless = require('serverless-http')
-
 const app = require('./app')
-const connectDB = require('./config/db')
 
-let isConnected = false
-
-async function bootstrap() {
-  if (!isConnected) {
-    await connectDB()
-    isConnected = true
-    console.log('MongoDB connected')
-  }
-}
-
-const handler = serverless(app)
-
-module.exports = async (req, res) => {
-  try {
-    await bootstrap()
-    return handler(req, res)
-  } catch (err) {
-    console.error('SERVER ERROR:', err)
-
-    return res.status(500).json({
-      success: false,
-      message: err.message,
-      stack: err.stack
-    })
-  }
-}
+module.exports = serverless(app)
