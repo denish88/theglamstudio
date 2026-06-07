@@ -85,6 +85,25 @@ const getMe = async (req, res, next) => {
   }
 }
 
+const confirmAgeConsent = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id)
+    if (!user) {
+      throw ApiError.notFound('User not found')
+    }
+
+    if (!user.ageConsentConfirmed) {
+      user.ageConsentConfirmed = true
+      user.ageConsentConfirmedAt = new Date()
+      await user.save({ validateBeforeSave: false })
+    }
+
+    ApiResponse.success(res, user.toSafeObject(), 'Age consent confirmed')
+  } catch (error) {
+    next(error)
+  }
+}
+
 const refreshAccessToken = async (req, res, next) => {
   try {
     const { refreshToken } = req.body
@@ -126,5 +145,6 @@ module.exports = {
   login,
   logout,
   getMe,
+  confirmAgeConsent,
   refreshAccessToken,
 }

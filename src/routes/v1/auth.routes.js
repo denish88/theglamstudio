@@ -10,6 +10,7 @@ const loginSchema = {
 router.post('/login', validate(loginSchema), authController.login)
 router.post('/logout', authenticate, authController.logout)
 router.get('/me', authenticate, authController.getMe)
+router.post('/age-consent', authenticate, authController.confirmAgeConsent)
 router.post('/refresh', authController.refreshAccessToken)
 
 module.exports = router

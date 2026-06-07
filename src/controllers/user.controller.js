@@ -160,6 +160,51 @@ const getReferralStats = async (req, res, next) => {
   }
 }
 
+const checkExpiredSubscriptions = async (req, res, next) => {
+  try {
+    const now = new Date()
+
+    const filter = {
+      deletedAt: null,
+      role: { $ne: 'admin' },
+      isActive: true,
+      'subscription.endDate': { $ne: null, $lt: now },
+    }
+
+    const expiredUsers = await User.find(filter)
+      .select('keyId subscription.endDate')
+      .lean()
+
+    if (expiredUsers.length === 0) {
+      return ApiResponse.success(res, {
+        deactivatedCount: 0,
+        deactivatedUsers: [],
+        checkedAt: now,
+      }, 'No expired subscriptions found')
+    }
+
+    await User.updateMany(filter, {
+      $set: {
+        isActive: false,
+        refreshToken: null,
+        deviceId: null,
+      },
+    })
+
+    ApiResponse.success(res, {
+      deactivatedCount: expiredUsers.length,
+      deactivatedUsers: expiredUsers.map((u) => ({
+        id: u._id,
+        keyId: u.keyId,
+        subscriptionEndDate: u.subscription?.endDate,
+      })),
+      checkedAt: now,
+    }, `${expiredUsers.length} user(s) deactivated due to expired subscription`)
+  } catch (error) {
+    next(error)
+  }
+}
+
 const toggleUserActive = async (req, res, next) => {
   try {
     const user = await User.findOne({ _id: req.params.id, deletedAt: null })
@@ -225,6 +270,7 @@ module.exports = {
   listUsers,
   getUserDetail,
   getReferralStats,
+  checkExpiredSubscriptions,
   toggleUserActive,
   deleteUser,
   updateUserPoints,

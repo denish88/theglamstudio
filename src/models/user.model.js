@@ -85,6 +85,14 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    ageConsentConfirmed: {
+      type: Boolean,
+      default: false,
+    },
+    ageConsentConfirmedAt: {
+      type: Date,
+      default: null,
+    },
     loginActivity: {
       type: [loginActivitySchema],
       default: [],
@@ -149,6 +157,8 @@ userSchema.methods.toSafeObject = function () {
     points: this.points || 0,
     isReferralApplied: !!this.referredBy,
     isActive: this.isActive,
+    ageConsentConfirmed: !!this.ageConsentConfirmed,
+    ageConsentConfirmedAt: this.ageConsentConfirmedAt || null,
   }
 }
 
