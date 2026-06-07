@@ -1,4 +1,4 @@
-const CACHE_NAME = 'glam-media-v1'
+const CACHE_NAME = 'glam-media-v2'
 const MEDIA_PATH = '/api/v1/media/'
 const MAX_AGE = 3 * 24 * 60 * 60 * 1000
 const MAX_ENTRIES = 500
@@ -29,19 +29,24 @@ self.addEventListener('fetch', (event) => {
 
 async function serveMedia(request) {
   const cache = await caches.open(CACHE_NAME)
-  const cached = await cache.match(request)
+  const cacheKey = stripRetryParam(request.url)
+  const cached = await cache.match(cacheKey)
 
   if (cached) {
     const ts = cached.headers.get('x-sw-ts')
-    if (ts && Date.now() - parseInt(ts) < MAX_AGE) {
+    if (ts && Date.now() - parseInt(ts, 10) < MAX_AGE) {
       return cached
     }
-    cache.delete(request)
+    await cache.delete(cacheKey)
   }
 
-  const response = await fetch(request, { credentials: 'same-origin' })
+  try {
+    const response = await fetch(request, { credentials: 'same-origin' })
 
-  if (response.ok) {
+    if (!response.ok) {
+      return response
+    }
+
     const blob = await response.clone().blob()
     const headers = new Headers(response.headers)
     headers.set('x-sw-ts', Date.now().toString())
@@ -52,10 +57,23 @@ async function serveMedia(request) {
       headers,
     })
 
-    cache.put(request, toCache).then(() => trimCache(cache))
-  }
+    await cache.put(cacheKey, toCache)
+    trimCache(cache)
 
-  return response
+    return response
+  } catch {
+    return fetch(request, { credentials: 'same-origin' })
+  }
+}
+
+function stripRetryParam(url) {
+  try {
+    const parsed = new URL(url)
+    parsed.searchParams.delete('_r')
+    return parsed.toString()
+  } catch {
+    return url
+  }
 }
 
 async function trimCache(cache) {

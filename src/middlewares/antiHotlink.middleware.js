@@ -9,6 +9,9 @@ if (NODE_ENV === 'development') {
 }
 
 const antiHotlink = (req, res, next) => {
+  // Authenticated media requests already passed cookie/token auth
+  if (req.user) return next()
+
   const referer = req.headers.referer || req.headers.referrer || ''
 
   if (!referer) {

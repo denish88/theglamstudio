@@ -49,6 +49,10 @@ const streamMedia = async (req, res, next) => {
       'Content-Disposition': 'inline',
     })
 
+    Body.on('error', (err) => {
+      if (!res.headersSent) next(err)
+      else res.destroy()
+    })
     Body.pipe(res)
   } catch (error) {
     next(error)

@@ -82,14 +82,17 @@ const apiLimiter = rateLimit({
 
 const mediaLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 500,
+  max: 1500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { statusCode: 429, status: 0, message: 'Too many requests', data: [], metadata: [] },
 })
 
 app.use('/api/v1/media', mediaLimiter)
-app.use('/api/', apiLimiter)
+app.use('/api/', (req, res, next) => {
+  if (req.path.startsWith('/v1/media')) return next()
+  apiLimiter(req, res, next)
+})
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', environment: NODE_ENV })
