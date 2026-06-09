@@ -2,6 +2,8 @@ const { v4: uuidv4 } = require('uuid')
 const { Post, Directory } = require('../models')
 const { ApiError, ApiResponse, uploadToR2, deleteFromR2, buildMediaUrls, generateSignedUrls, buildR2Key, optimizeImage } = require('../utils')
 
+const VALID_CATEGORIES = [0, 1, 2, 3, 4, 5]
+
 async function processAndUploadImages(files) {
   const uploadPromises = files.map(async (file) => {
     const optimized = await optimizeImage(file.buffer)
@@ -28,8 +30,8 @@ const createPost = async (req, res, next) => {
       throw ApiError.badRequest('Directory is required')
     }
 
-    if (category === undefined || ![0, 1, 2, 3].includes(Number(category))) {
-      throw ApiError.badRequest('Category must be 0, 1, 2 or 3')
+    if (category === undefined || !VALID_CATEGORIES.includes(Number(category))) {
+      throw ApiError.badRequest('Category must be 0, 1, 2, 3, 4 or 5')
     }
 
     const dir = await Directory.findOne({ _id: directory, deletedAt: null })
@@ -139,7 +141,13 @@ const updatePost = async (req, res, next) => {
     const { caption, category, isActive, isWatermarked, directory } = req.body
 
     if (caption !== undefined) post.caption = caption
-    if (category !== undefined) post.category = Number(category)
+    if (category !== undefined) {
+      const cat = Number(category)
+      if (!VALID_CATEGORIES.includes(cat)) {
+        throw ApiError.badRequest('Category must be 0, 1, 2, 3, 4 or 5')
+      }
+      post.category = cat
+    }
     if (isActive !== undefined) post.isActive = isActive
     if (isWatermarked !== undefined) {
       post.isWatermarked = isWatermarked === 'true' || isWatermarked === true
@@ -162,6 +170,31 @@ const updatePost = async (req, res, next) => {
     postObj.imageUrl = await generateSignedUrls(postObj.imageUrl)
 
     ApiResponse.success(res, postObj, 'Post updated')
+  } catch (error) {
+    next(error)
+  }
+}
+
+const updatePostCategory = async (req, res, next) => {
+  try {
+    const { category } = req.body
+
+    if (category === undefined || !VALID_CATEGORIES.includes(Number(category))) {
+      throw ApiError.badRequest('Category must be 0, 1, 2, 3, 4 or 5')
+    }
+
+    const post = await Post.findOne({ _id: req.params.id, deletedAt: null })
+    if (!post) {
+      throw ApiError.notFound('Post not found')
+    }
+
+    post.category = Number(category)
+    await post.save()
+
+    const postObj = post.toObject()
+    postObj.imageUrl = await generateSignedUrls(postObj.imageUrl)
+
+    ApiResponse.success(res, postObj, 'Post category updated')
   } catch (error) {
     next(error)
   }
@@ -194,5 +227,6 @@ module.exports = {
   listPosts,
   getPost,
   updatePost,
+  updatePostCategory,
   deletePost,
 }

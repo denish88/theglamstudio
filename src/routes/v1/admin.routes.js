@@ -24,6 +24,7 @@ router.delete('/directories/:id', directoryController.deleteDirectory)
 // ── Post management ──
 router.post('/posts', upload.array('images', 20), postController.createPost)
 router.get('/posts', postController.listPosts)
+router.patch('/posts/:id/category', postController.updatePostCategory)
 router.get('/posts/:id', postController.getPost)
 router.put('/posts/:id', upload.array('images', 20), postController.updatePost)
 router.delete('/posts/:id', postController.deletePost)

@@ -11,8 +11,8 @@ const getPosts = async (req, res, next) => {
 
     if (req.query.category !== undefined) {
       const cat = Number(req.query.category)
-      if (![0, 1, 2, 3].includes(cat)) {
-        throw ApiError.badRequest('Category must be 0, 1, 2 or 3')
+      if (![0, 1, 2, 3, 4, 5].includes(cat)) {
+        throw ApiError.badRequest('Category must be 0, 1, 2, 3, 4 or 5')
       }
       filter.category = cat
     }
