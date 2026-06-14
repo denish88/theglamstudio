@@ -1,6 +1,6 @@
 const CACHE_NAME = 'glam-media-v2'
 const MEDIA_PATH = '/api/v1/media/'
-const MAX_AGE = 3 * 24 * 60 * 60 * 1000
+const MAX_AGE = 15 * 24 * 60 * 60 * 1000
 const MAX_ENTRIES = 500
 
 self.addEventListener('install', () => self.skipWaiting())
