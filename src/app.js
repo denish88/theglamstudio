@@ -2,7 +2,6 @@ const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
 const morgan = require('morgan')
-const rateLimit = require('express-rate-limit')
 const cookieParser = require('cookie-parser')
 const path = require('path')
 const fs = require('fs')
@@ -71,28 +70,6 @@ if (NODE_ENV === 'development') {
 } else {
   app.use(morgan('combined'))
 }
-
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { statusCode: 429, status: 0, message: 'Too many requests, please try again later', data: [], metadata: [] },
-})
-
-const mediaLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 1500,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { statusCode: 429, status: 0, message: 'Too many requests', data: [], metadata: [] },
-})
-
-app.use('/api/v1/media', mediaLimiter)
-app.use('/api/', (req, res, next) => {
-  if (req.path.startsWith('/v1/media')) return next()
-  apiLimiter(req, res, next)
-})
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', environment: NODE_ENV })

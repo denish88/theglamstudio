@@ -5,6 +5,7 @@ const cryptoUtils = require('./crypto')
 const r2 = require('./r2')
 const imageOptimizer = require('./imageOptimizer')
 const cookieUtils = require('./cookie')
+const dateUtils = require('./date')
 
 module.exports = {
   ApiError,
@@ -14,4 +15,5 @@ module.exports = {
   ...r2,
   ...imageOptimizer,
   ...cookieUtils,
+  ...dateUtils,
 }

@@ -1,5 +1,5 @@
 const { Post, Like } = require('../models')
-const { ApiError, ApiResponse, buildMediaUrls } = require('../utils')
+const { ApiError, ApiResponse, buildMediaUrls, getISTDayBounds } = require('../utils')
 
 const getPosts = async (req, res, next) => {
   try {
@@ -15,6 +15,11 @@ const getPosts = async (req, res, next) => {
         throw ApiError.badRequest('Category must be 0, 1, 2, 3, 4 or 5')
       }
       filter.category = cat
+    }
+
+    if (req.query.today === 'true') {
+      const { start, end } = getISTDayBounds()
+      filter.createdAt = { $gte: start, $lte: end }
     }
 
     if (cursor) {

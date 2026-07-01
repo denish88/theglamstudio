@@ -1,8 +1,37 @@
 const { v4: uuidv4 } = require('uuid')
 const { Post, Directory } = require('../models')
-const { ApiError, ApiResponse, uploadToR2, deleteFromR2, buildMediaUrls, generateSignedUrls, buildR2Key, optimizeImage } = require('../utils')
+const { ApiError, ApiResponse, uploadToR2, deleteFromR2, generateSignedUrls, buildR2Key, optimizeImage } = require('../utils')
 
 const VALID_CATEGORIES = [0, 1, 2, 3, 4, 5]
+
+function parseBoolean(value) {
+  return value === 'true' || value === true
+}
+
+function parseJsonArray(value) {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+async function formatPostResponse(post) {
+  const obj = typeof post.toObject === 'function' ? post.toObject() : { ...post }
+  const keys = [...(obj.imageUrl || [])]
+  obj.imageKeys = keys
+  obj.imageUrl = await generateSignedUrls(keys)
+  return obj
+}
+
+async function refreshDirectoryCount(directoryId) {
+  if (!directoryId) return
+  const count = await Post.countDocuments({ directory: directoryId, deletedAt: null })
+  await Directory.findByIdAndUpdate(directoryId, { totalPictures: count })
+}
 
 async function processAndUploadImages(files) {
   const uploadPromises = files.map(async (file) => {
@@ -46,14 +75,12 @@ const createPost = async (req, res, next) => {
       caption: caption || '',
       category: Number(category),
       directory: dir._id,
-      isWatermarked: isWatermarked === 'true' || isWatermarked === true,
+      isWatermarked: parseBoolean(isWatermarked),
     })
 
-    dir.totalPictures = await Post.countDocuments({ directory: dir._id, deletedAt: null })
-    await dir.save()
+    await refreshDirectoryCount(dir._id)
 
-    const postObj = post.toObject()
-    postObj.imageUrl = await generateSignedUrls(uploadedKeys)
+    const postObj = await formatPostResponse(post)
 
     ApiResponse.created(res, postObj, 'Post created')
   } catch (error) {
@@ -92,12 +119,7 @@ const listPosts = async (req, res, next) => {
       Post.countDocuments(filter),
     ])
 
-    const postsWithSignedUrls = await Promise.all(
-      posts.map(async (post) => ({
-        ...post,
-        imageUrl: await generateSignedUrls(post.imageUrl),
-      })),
-    )
+    const postsWithSignedUrls = await Promise.all(posts.map((post) => formatPostResponse(post)))
 
     ApiResponse.success(res, {
       posts: postsWithSignedUrls,
@@ -123,9 +145,9 @@ const getPost = async (req, res, next) => {
       throw ApiError.notFound('Post not found')
     }
 
-    post.imageUrl = await generateSignedUrls(post.imageUrl)
+    const postObj = await formatPostResponse(post)
 
-    ApiResponse.success(res, post)
+    ApiResponse.success(res, postObj)
   } catch (error) {
     next(error)
   }
@@ -138,6 +160,7 @@ const updatePost = async (req, res, next) => {
       throw ApiError.notFound('Post not found')
     }
 
+    const previousDirectoryId = post.directory?.toString()
     const { caption, category, isActive, isWatermarked, directory } = req.body
 
     if (caption !== undefined) post.caption = caption
@@ -148,15 +171,26 @@ const updatePost = async (req, res, next) => {
       }
       post.category = cat
     }
-    if (isActive !== undefined) post.isActive = isActive
-    if (isWatermarked !== undefined) {
-      post.isWatermarked = isWatermarked === 'true' || isWatermarked === true
-    }
+    if (isActive !== undefined) post.isActive = parseBoolean(isActive)
+    if (isWatermarked !== undefined) post.isWatermarked = parseBoolean(isWatermarked)
 
     if (directory) {
       const dir = await Directory.findOne({ _id: directory, deletedAt: null })
       if (!dir) throw ApiError.notFound('Directory not found')
       post.directory = dir._id
+    }
+
+    const removeImages = parseJsonArray(req.body.removeImages)
+    if (removeImages.length > 0) {
+      const keysToRemove = removeImages.filter((key) => post.imageUrl.includes(key))
+      if (keysToRemove.length > 0) {
+        const remaining = post.imageUrl.filter((key) => !keysToRemove.includes(key))
+        if (remaining.length === 0) {
+          throw ApiError.badRequest('Post must have at least one image')
+        }
+        await Promise.allSettled(keysToRemove.map((key) => deleteFromR2(key)))
+        post.imageUrl = remaining
+      }
     }
 
     if (req.files && req.files.length > 0) {
@@ -166,8 +200,15 @@ const updatePost = async (req, res, next) => {
 
     await post.save()
 
-    const postObj = post.toObject()
-    postObj.imageUrl = await generateSignedUrls(postObj.imageUrl)
+    const directoryChanged = post.directory.toString() !== previousDirectoryId
+    if (directoryChanged) {
+      await Promise.all([
+        refreshDirectoryCount(previousDirectoryId),
+        refreshDirectoryCount(post.directory),
+      ])
+    }
+
+    const postObj = await formatPostResponse(post)
 
     ApiResponse.success(res, postObj, 'Post updated')
   } catch (error) {
@@ -191,8 +232,7 @@ const updatePostCategory = async (req, res, next) => {
     post.category = Number(category)
     await post.save()
 
-    const postObj = post.toObject()
-    postObj.imageUrl = await generateSignedUrls(postObj.imageUrl)
+    const postObj = await formatPostResponse(post)
 
     ApiResponse.success(res, postObj, 'Post category updated')
   } catch (error) {
@@ -207,14 +247,13 @@ const deletePost = async (req, res, next) => {
       throw ApiError.notFound('Post not found')
     }
 
+    const directoryId = post.directory
+
     post.deletedAt = new Date()
     post.isActive = false
     await post.save()
 
-    if (post.directory) {
-      const count = await Post.countDocuments({ directory: post.directory, deletedAt: null })
-      await Directory.findByIdAndUpdate(post.directory, { totalPictures: count })
-    }
+    await refreshDirectoryCount(directoryId)
 
     ApiResponse.success(res, null, 'Post deleted')
   } catch (error) {
