@@ -1,6 +1,6 @@
 const router = require('express').Router()
 const { userController, directoryController, postController, contactController, ratingController, pollController } = require('../../controllers')
-const { authenticate, adminOnly, upload } = require('../../middlewares')
+const { authenticate, adminOnly, upload, uploadTimeout } = require('../../middlewares')
 
 router.use(authenticate, adminOnly)
 
@@ -22,11 +22,11 @@ router.put('/directories/:id', directoryController.updateDirectory)
 router.delete('/directories/:id', directoryController.deleteDirectory)
 
 // ── Post management ──
-router.post('/posts', upload.array('images', 20), postController.createPost)
+router.post('/posts', uploadTimeout, upload.array('images', 20), postController.createPost)
 router.get('/posts', postController.listPosts)
 router.patch('/posts/:id/category', postController.updatePostCategory)
 router.get('/posts/:id', postController.getPost)
-router.put('/posts/:id', upload.array('images', 20), postController.updatePost)
+router.put('/posts/:id', uploadTimeout, upload.array('images', 20), postController.updatePost)
 router.delete('/posts/:id', postController.deletePost)
 
 // ── Contact queries ──

@@ -1,8 +1,10 @@
 const { v4: uuidv4 } = require('uuid')
 const { Post, Directory } = require('../models')
 const { ApiError, ApiResponse, uploadToR2, deleteFromR2, generateSignedUrls, buildR2Key, optimizeImage } = require('../utils')
+const { processInBatches } = require('../utils/processInBatches')
 
 const VALID_CATEGORIES = [0, 1, 2, 3, 4, 5]
+const IMAGE_PROCESS_CONCURRENCY = 4
 
 function parseBoolean(value) {
   return value === 'true' || value === true
@@ -34,15 +36,13 @@ async function refreshDirectoryCount(directoryId) {
 }
 
 async function processAndUploadImages(files) {
-  const uploadPromises = files.map(async (file) => {
+  return processInBatches(files, IMAGE_PROCESS_CONCURRENCY, async (file) => {
     const optimized = await optimizeImage(file.buffer)
     const filename = `${uuidv4()}.webp`
     const key = buildR2Key(filename)
     await uploadToR2(optimized, key, 'image/webp')
     return key
   })
-
-  return Promise.all(uploadPromises)
 }
 
 const createPost = async (req, res, next) => {

@@ -20,7 +20,10 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: MAX_FILE_SIZE },
+  limits: {
+    fileSize: MAX_FILE_SIZE,
+    files: 20,
+  },
 })
 
 module.exports = upload
