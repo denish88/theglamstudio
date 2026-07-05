@@ -2,6 +2,7 @@ const { v4: uuidv4 } = require('uuid')
 const { Post, Directory } = require('../models')
 const { ApiError, ApiResponse, uploadToR2, deleteFromR2, generateSignedUrls, buildR2Key, optimizeImage } = require('../utils')
 const { processInBatches } = require('../utils/processInBatches')
+const { invalidateHomeStats } = require('../utils/homeStats')
 
 const VALID_CATEGORIES = [0, 1, 2, 3, 4, 5]
 const IMAGE_PROCESS_CONCURRENCY = 4
@@ -81,6 +82,8 @@ const createPost = async (req, res, next) => {
     await refreshDirectoryCount(dir._id)
 
     const postObj = await formatPostResponse(post)
+
+    invalidateHomeStats()
 
     ApiResponse.created(res, postObj, 'Post created')
   } catch (error) {
@@ -254,6 +257,8 @@ const deletePost = async (req, res, next) => {
     await post.save()
 
     await refreshDirectoryCount(directoryId)
+
+    invalidateHomeStats()
 
     ApiResponse.success(res, null, 'Post deleted')
   } catch (error) {

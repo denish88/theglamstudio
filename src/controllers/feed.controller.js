@@ -1,5 +1,54 @@
 const { Post, Like } = require('../models')
 const { ApiError, ApiResponse, buildMediaUrls, getISTDayBounds } = require('../utils')
+const { getHomeStats } = require('../utils/homeStats')
+
+const HOME_PREVIEW_LIMIT = 3
+
+const getHomeFeed = async (req, res, next) => {
+  try {
+    const { start, end } = getISTDayBounds()
+    const postFilter = {
+      deletedAt: null,
+      isActive: true,
+      createdAt: { $gte: start, $lte: end },
+    }
+    const fetchLimit = HOME_PREVIEW_LIMIT + 1
+
+    const [stats, posts] = await Promise.all([
+      getHomeStats(),
+      Post.find(postFilter)
+        .select('_id imageUrl category createdAt')
+        .sort({ _id: -1 })
+        .limit(fetchLimit)
+        .lean(),
+    ])
+
+    const hasMoreToday = posts.length > HOME_PREVIEW_LIMIT
+    const previewPosts = hasMoreToday ? posts.slice(0, HOME_PREVIEW_LIMIT) : posts
+
+    const latestPosts = previewPosts.map((post) => {
+      const imageCount = post.imageUrl?.length || 0
+      const firstKey = imageCount > 0 ? post.imageUrl[0] : null
+
+      return {
+        _id: post._id,
+        category: post.category,
+        createdAt: post.createdAt,
+        imageUrl: firstKey ? buildMediaUrls([firstKey]) : [],
+        imageCount,
+      }
+    })
+
+    ApiResponse.success(res, {
+      totalPosts: stats.totalPosts,
+      announcement: stats.announcement,
+      latestPosts,
+      hasMoreToday,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
 
 const getPosts = async (req, res, next) => {
   try {
@@ -91,12 +140,8 @@ const getPostById = async (req, res, next) => {
 
 const getPostStats = async (req, res, next) => {
   try {
-    const totalPosts = await Post.countDocuments({
-      deletedAt: null,
-      isActive: true,
-    })
-
-    ApiResponse.success(res, { totalPosts })
+    const stats = await getHomeStats()
+    ApiResponse.success(res, { totalPosts: stats.totalPosts })
   } catch (error) {
     next(error)
   }
@@ -137,6 +182,7 @@ const toggleLike = async (req, res, next) => {
 }
 
 module.exports = {
+  getHomeFeed,
   getPosts,
   getPostById,
   getPostStats,

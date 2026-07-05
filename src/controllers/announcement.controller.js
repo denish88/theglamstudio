@@ -1,6 +1,7 @@
 const Announcement = require('../models/announcement.model')
 const { SITE_ANNOUNCEMENT_KEY } = require('../models/announcement.model')
 const { ApiResponse, ApiError } = require('../utils')
+const { getHomeStats, invalidateHomeStats } = require('../utils/homeStats')
 
 const getSiteAnnouncement = async () => {
   let announcement = await Announcement.findOne({
@@ -73,6 +74,8 @@ const saveAnnouncement = async (req, res, next) => {
       { deletedAt: new Date(), isActive: false },
     )
 
+    invalidateHomeStats()
+
     return ApiResponse.success(
       res,
       {
@@ -89,28 +92,10 @@ const saveAnnouncement = async (req, res, next) => {
 
 const getActiveAnnouncement = async (req, res, next) => {
   try {
-    const announcement = await Announcement.findOne({
-      singletonKey: SITE_ANNOUNCEMENT_KEY,
-      isActive: true,
-      deletedAt: null,
-    }).lean()
-
-    if (announcement?.text?.trim()) {
-      return ApiResponse.success(res, {
-        announcement: { text: announcement.text, updatedAt: announcement.updatedAt },
-      })
-    }
-
-    const legacy = await Announcement.findOne({
-      isActive: true,
-      deletedAt: null,
-      text: { $ne: '' },
-    })
-      .sort({ updatedAt: -1 })
-      .lean()
+    const stats = await getHomeStats()
 
     return ApiResponse.success(res, {
-      announcement: legacy ? { text: legacy.text, updatedAt: legacy.updatedAt } : null,
+      announcement: stats.announcement,
     })
   } catch (error) {
     next(error)
