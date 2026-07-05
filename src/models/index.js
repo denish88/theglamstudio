@@ -6,5 +6,6 @@ const Contact = require('./contact.model')
 const Rating = require('./rating.model')
 const Poll = require('./poll.model')
 const PollVote = require('./pollVote.model')
+const Announcement = require('./announcement.model')
 
-module.exports = { User, Post, Directory, Like, Contact, Rating, Poll, PollVote }
+module.exports = { User, Post, Directory, Like, Contact, Rating, Poll, PollVote, Announcement }

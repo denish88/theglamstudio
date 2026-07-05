@@ -1,5 +1,5 @@
 const router = require('express').Router()
-const { userController, directoryController, postController, contactController, ratingController, pollController } = require('../../controllers')
+const { userController, directoryController, postController, contactController, ratingController, pollController, announcementController } = require('../../controllers')
 const { authenticate, adminOnly, upload, uploadTimeout } = require('../../middlewares')
 
 router.use(authenticate, adminOnly)
@@ -44,5 +44,9 @@ router.get('/polls', pollController.listPolls)
 router.get('/polls/:id/results', pollController.getPollResults)
 router.patch('/polls/:id/toggle-active', pollController.togglePollActive)
 router.delete('/polls/:id', pollController.deletePoll)
+
+// ── Announcements (single site-wide announcement) ──
+router.get('/announcements', announcementController.getAnnouncement)
+router.put('/announcements', announcementController.saveAnnouncement)
 
 module.exports = router

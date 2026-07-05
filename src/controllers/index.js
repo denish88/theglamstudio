@@ -8,6 +8,7 @@ const mediaController = require('./media.controller')
 const contactController = require('./contact.controller')
 const ratingController = require('./rating.controller')
 const pollController = require('./poll.controller')
+const announcementController = require('./announcement.controller')
 
 module.exports = {
   authController,
@@ -20,4 +21,5 @@ module.exports = {
   contactController,
   ratingController,
   pollController,
+  announcementController,
 }
