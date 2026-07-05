@@ -3,6 +3,7 @@ const { ApiResponse, ApiError } = require('../utils')
 const { getISTMonthBounds } = require('../utils/date')
 
 const SUBSCRIPTION_TYPES = ['monthly', '3months', 'yearly']
+const LATEST_PAYMENTS_LIMIT = 10
 
 const getPaymentStats = async () => {
   const baseMatch = { deletedAt: null }
@@ -92,35 +93,25 @@ const createPayment = async (req, res, next) => {
 
 const listPayments = async (req, res, next) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page, 10) || 1)
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20))
-    const skip = (page - 1) * limit
-
     const filter = { deletedAt: null }
 
-    if (req.query.userId) {
-      filter.user = req.query.userId
-    }
     if (req.query.subscriptionType && SUBSCRIPTION_TYPES.includes(req.query.subscriptionType)) {
       filter.subscriptionType = req.query.subscriptionType
     }
 
-    const [payments, total, stats] = await Promise.all([
+    const [payments, stats] = await Promise.all([
       PaymentHistory.find(filter)
         .sort({ paymentDate: -1, createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
+        .limit(LATEST_PAYMENTS_LIMIT)
         .populate('user', 'keyId')
-        .populate('recordedBy', 'keyId')
         .lean(),
-      PaymentHistory.countDocuments(filter),
       getPaymentStats(),
     ])
 
     return ApiResponse.success(res, {
       payments,
       stats,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      limit: LATEST_PAYMENTS_LIMIT,
     })
   } catch (error) {
     next(error)

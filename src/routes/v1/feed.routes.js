@@ -4,6 +4,7 @@ const { authenticate } = require('../../middlewares')
 
 router.use(authenticate)
 
+router.get('/posts/stats', feedController.getPostStats)
 router.get('/posts', feedController.getPosts)
 router.get('/posts/:id', feedController.getPostById)
 router.post('/posts/:id/like', feedController.toggleLike)

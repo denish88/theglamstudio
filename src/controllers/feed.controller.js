@@ -89,6 +89,19 @@ const getPostById = async (req, res, next) => {
   }
 }
 
+const getPostStats = async (req, res, next) => {
+  try {
+    const totalPosts = await Post.countDocuments({
+      deletedAt: null,
+      isActive: true,
+    })
+
+    ApiResponse.success(res, { totalPosts })
+  } catch (error) {
+    next(error)
+  }
+}
+
 const toggleLike = async (req, res, next) => {
   try {
     const userId = req.user._id
@@ -126,5 +139,6 @@ const toggleLike = async (req, res, next) => {
 module.exports = {
   getPosts,
   getPostById,
+  getPostStats,
   toggleLike,
 }
