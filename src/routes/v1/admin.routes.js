@@ -1,5 +1,5 @@
 const router = require('express').Router()
-const { userController, directoryController, postController, contactController, ratingController, pollController, announcementController } = require('../../controllers')
+const { userController, directoryController, postController, contactController, ratingController, pollController, announcementController, paymentHistoryController } = require('../../controllers')
 const { authenticate, adminOnly, upload, uploadTimeout } = require('../../middlewares')
 
 router.use(authenticate, adminOnly)
@@ -48,5 +48,10 @@ router.delete('/polls/:id', pollController.deletePoll)
 // ── Announcements (single site-wide announcement) ──
 router.get('/announcements', announcementController.getAnnouncement)
 router.put('/announcements', announcementController.saveAnnouncement)
+
+// ── Payment history ──
+router.post('/payments', paymentHistoryController.createPayment)
+router.get('/payments', paymentHistoryController.listPayments)
+router.delete('/payments/:id', paymentHistoryController.deletePayment)
 
 module.exports = router
