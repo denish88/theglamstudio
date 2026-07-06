@@ -12,11 +12,21 @@ function generateDeviceKeyID() {
   return `${seg()}-${seg()}-${seg()}-${seg()}-${seg()}`
 }
 
+const { normalizeKeyId } = require('../utils/keyId')
+
 const login = async (req, res, next) => {
   try {
     const { keyId, password } = req.body
 
-    const user = await User.findOne({ keyId: keyId.toLowerCase(), deletedAt: null }).select('+password +refreshToken')
+    const normalizedKeyId = normalizeKeyId(keyId)
+    if (!normalizedKeyId) {
+      throw ApiError.unauthorized('Invalid Key ID or password')
+    }
+
+    const user = await User.findOne({
+      keyId: normalizedKeyId,
+      deletedAt: null,
+    }).select('+password +refreshToken')
     if (!user) {
       throw ApiError.unauthorized('Invalid Key ID or password')
     }

@@ -27,7 +27,6 @@ const userSchema = new mongoose.Schema(
       required: [true, 'Key ID is required'],
       unique: true,
       trim: true,
-      lowercase: true,
     },
     displayName: {
       type: String,

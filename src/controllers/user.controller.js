@@ -4,6 +4,7 @@ const {
   generateNextMemberKeyId,
   formatMemberKeyIdDisplay,
   getAdminDisplayName,
+  normalizeKeyId,
   validateCollectorName,
 } = require('../utils/memberKeyId')
 
@@ -67,7 +68,7 @@ const createUser = async (req, res, next) => {
 
     let referrer = null
     if (referredByKeyId) {
-      referrer = await User.findOne({ keyId: referredByKeyId.toLowerCase(), deletedAt: null })
+      referrer = await User.findOne({ keyId: normalizeKeyId(referredByKeyId), deletedAt: null })
       if (referrer) {
         userData.referredBy = referrer._id
       }

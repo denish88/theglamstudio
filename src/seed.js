@@ -126,7 +126,7 @@ const seed = async () => {
       }
     }
 
-    const admin = await User.findOne({ keyId: 'admin' })
+    const admin = await User.findOne({ keyId: { $in: ['TGS-AD-01', 'admin'] } })
     const user001 = await User.findOne({ keyId: 'user001' })
     if (admin && user001 && !user001.referredBy) {
       user001.referredBy = admin._id

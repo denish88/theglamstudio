@@ -1,21 +1,15 @@
 const { User } = require('../models')
 const MemberKeyCounter = require('../models/memberKeyCounter.model')
 const { ApiError } = require('./apiError')
+const {
+  normalizeKeyId,
+  parseMemberKeyId,
+  formatMemberKeyIdDisplay,
+  formatAdminKeyIdDisplay,
+  formatKeyIdDisplay,
+} = require('./keyId')
 
-const MEMBER_KEY_PREFIX = 'tgs-mbr-'
 const MAX_MEMBER_SEQUENCE = 26 * 99
-
-function parseMemberKeyId(keyId) {
-  if (!keyId) return null
-  const match = String(keyId).toLowerCase().match(/^tgs-mbr-([a-z])(\d+)$/)
-  if (!match) return null
-
-  const letterIndex = match[1].charCodeAt(0) - 97
-  const num = Number.parseInt(match[2], 10)
-  if (letterIndex < 0 || letterIndex > 25 || num < 1 || num > 99) return null
-
-  return { letterIndex, num }
-}
 
 function sequenceToMemberKeyId(seq) {
   if (seq < 1 || seq > MAX_MEMBER_SEQUENCE) {
@@ -24,8 +18,8 @@ function sequenceToMemberKeyId(seq) {
 
   const letterIndex = Math.floor((seq - 1) / 99)
   const num = ((seq - 1) % 99) + 1
-  const letter = String.fromCharCode(97 + letterIndex)
-  return `${MEMBER_KEY_PREFIX}${letter}${num}`
+  const letter = String.fromCharCode(65 + letterIndex)
+  return `TGS-MBR-${letter}${num}`
 }
 
 function memberKeyIdToSequence(keyId) {
@@ -34,17 +28,9 @@ function memberKeyIdToSequence(keyId) {
   return parsed.letterIndex * 99 + parsed.num
 }
 
-function formatMemberKeyIdDisplay(keyId) {
-  const parsed = parseMemberKeyId(keyId)
-  if (!parsed) return keyId
-
-  const letter = String.fromCharCode(65 + parsed.letterIndex)
-  return `TGS-MBR-${letter}${parsed.num}`
-}
-
 async function syncMemberKeyCounter() {
   const users = await User.find({
-    keyId: { $regex: /^tgs-mbr-[a-z]\d+$/i },
+    keyId: { $regex: /^TGS-MBR-[A-Z]\d+$/i },
     deletedAt: null,
   })
     .select('keyId')
@@ -87,7 +73,9 @@ function getAdminDisplayName(user) {
   if (!user) return 'Admin'
   const displayName = user.displayName?.trim()
   if (displayName) return displayName
-  return formatMemberKeyIdDisplay(user.keyId) || String(user.keyId || 'Admin').toUpperCase()
+  return formatAdminKeyIdDisplay(user.keyId)
+    || formatMemberKeyIdDisplay(user.keyId)
+    || user.keyId
 }
 
 async function validateCollectorName(collector) {
@@ -110,7 +98,10 @@ async function validateCollectorName(collector) {
 
 module.exports = {
   generateNextMemberKeyId,
+  normalizeKeyId,
   formatMemberKeyIdDisplay,
+  formatAdminKeyIdDisplay,
+  formatKeyIdDisplay,
   getAdminDisplayName,
   memberKeyIdToSequence,
   validateCollectorName,
