@@ -6,6 +6,7 @@ const seedUsers = [
     keyId: 'admin',
     password: 'admin123',
     role: 'admin',
+    displayName: 'Admin',
     isActive: true,
     subscription: {
       startDate: new Date('2026-01-15'),

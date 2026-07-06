@@ -31,6 +31,18 @@ const paymentHistorySchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    recordedByAdmin: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: null,
+    },
+    collector: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: null,
+    },
     deletedAt: {
       type: Date,
       default: null,
@@ -44,6 +56,7 @@ const paymentHistorySchema = new mongoose.Schema(
 paymentHistorySchema.index({ deletedAt: 1, paymentDate: -1 })
 paymentHistorySchema.index({ user: 1, deletedAt: 1, paymentDate: -1 })
 paymentHistorySchema.index({ deletedAt: 1, paymentDate: 1 })
+paymentHistorySchema.index({ deletedAt: 1, collector: 1, paymentDate: -1 })
 
 const PaymentHistory = mongoose.model('PaymentHistory', paymentHistorySchema)
 

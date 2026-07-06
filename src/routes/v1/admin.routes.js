@@ -6,6 +6,7 @@ router.use(authenticate, adminOnly)
 
 // ── User management ──
 router.post('/users', userController.createUser)
+router.get('/users/collectors', userController.listCollectors)
 router.get('/users', userController.listUsers)
 router.post('/users/check-subscriptions', userController.checkExpiredSubscriptions)
 router.get('/users/:id', userController.getUserDetail)

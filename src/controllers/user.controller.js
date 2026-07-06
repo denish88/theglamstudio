@@ -1,11 +1,11 @@
 const { User } = require('../models')
 const { ApiError, ApiResponse } = require('../utils')
-const crypto = require('crypto')
-
-function generateKeyId() {
-  const seg = () => crypto.randomBytes(1).toString('hex')
-  return `user_${seg()}_${seg()}_${seg()}`
-}
+const {
+  generateNextMemberKeyId,
+  formatMemberKeyIdDisplay,
+  getAdminDisplayName,
+  validateCollectorName,
+} = require('../utils/memberKeyId')
 
 function generatePassword() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -16,11 +16,32 @@ function generatePassword() {
   return password
 }
 
+const listCollectors = async (req, res, next) => {
+  try {
+    const admins = await User.find({ role: 'admin', deletedAt: null, isActive: true })
+      .select('keyId displayName')
+      .sort({ displayName: 1, keyId: 1 })
+      .lean()
+
+    const collectors = admins.map((admin) => ({
+      name: getAdminDisplayName(admin),
+      keyId: admin.keyId,
+    }))
+
+    ApiResponse.success(res, { collectors })
+  } catch (error) {
+    next(error)
+  }
+}
+
 const createUser = async (req, res, next) => {
   try {
-    const { subscriptionType, subscriptionMonths, referredByKeyId } = req.body
+    const { subscriptionType, referredByKeyId, collector } = req.body
 
-    const keyId = generateKeyId()
+    const collectorName = await validateCollectorName(collector)
+    const createdByAdmin = getAdminDisplayName(req.user)
+
+    const keyId = await generateNextMemberKeyId()
     const plainPassword = generatePassword()
 
     const subType = subscriptionType || 'monthly'
@@ -35,6 +56,8 @@ const createUser = async (req, res, next) => {
       password: plainPassword,
       role: 'user',
       isActive: true,
+      createdByAdmin,
+      collector: collectorName,
       subscription: {
         startDate,
         endDate,
@@ -67,9 +90,12 @@ const createUser = async (req, res, next) => {
 
     ApiResponse.created(res, {
       keyId: user.keyId,
+      keyIdDisplay: formatMemberKeyIdDisplay(user.keyId),
       password: plainPassword,
       referralCode: user.referralCode,
       subscription: user.subscription,
+      createdByAdmin: user.createdByAdmin,
+      collector: user.collector,
     }, 'User created successfully')
   } catch (error) {
     next(error)
@@ -89,6 +115,9 @@ const listUsers = async (req, res, next) => {
     }
     if (req.query.search) {
       filter.keyId = { $regex: req.query.search, $options: 'i' }
+    }
+    if (req.query.collector) {
+      filter.collector = req.query.collector
     }
 
     const [users, total] = await Promise.all([
@@ -266,6 +295,7 @@ const updateUserPoints = async (req, res, next) => {
 }
 
 module.exports = {
+  listCollectors,
   createUser,
   listUsers,
   getUserDetail,

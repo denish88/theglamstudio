@@ -1,54 +1,76 @@
 const { PaymentHistory, User } = require('../models')
 const { ApiResponse, ApiError } = require('../utils')
 const { getISTMonthBounds } = require('../utils/date')
+const { getAdminDisplayName, validateCollectorName } = require('../utils/memberKeyId')
 
 const SUBSCRIPTION_TYPES = ['monthly', '3months', 'yearly']
-const LATEST_PAYMENTS_LIMIT = 10
 
 const getPaymentStats = async () => {
   const baseMatch = { deletedAt: null }
   const { start, end, label } = getISTMonthBounds()
 
-  const [totals] = await PaymentHistory.aggregate([
-    { $match: baseMatch },
-    {
-      $group: {
-        _id: null,
-        totalCollection: { $sum: '$amount' },
-        totalPayments: { $sum: 1 },
+  const [totals, monthly, monthlyByCollector] = await Promise.all([
+    PaymentHistory.aggregate([
+      { $match: baseMatch },
+      {
+        $group: {
+          _id: null,
+          totalCollection: { $sum: '$amount' },
+          totalPayments: { $sum: 1 },
+        },
       },
-    },
-  ])
-
-  const [monthly] = await PaymentHistory.aggregate([
-    {
-      $match: {
-        ...baseMatch,
-        paymentDate: { $gte: start, $lte: end },
+    ]),
+    PaymentHistory.aggregate([
+      {
+        $match: {
+          ...baseMatch,
+          paymentDate: { $gte: start, $lte: end },
+        },
       },
-    },
-    {
-      $group: {
-        _id: null,
-        monthlyRevenue: { $sum: '$amount' },
-        monthlyPayments: { $sum: 1 },
+      {
+        $group: {
+          _id: null,
+          monthlyRevenue: { $sum: '$amount' },
+          monthlyPayments: { $sum: 1 },
+        },
       },
-    },
+    ]),
+    PaymentHistory.aggregate([
+      {
+        $match: {
+          ...baseMatch,
+          paymentDate: { $gte: start, $lte: end },
+        },
+      },
+      {
+        $group: {
+          _id: '$collector',
+          revenue: { $sum: '$amount' },
+          payments: { $sum: 1 },
+        },
+      },
+      { $sort: { revenue: -1 } },
+    ]),
   ])
 
   return {
-    totalCollection: totals?.totalCollection || 0,
-    totalPayments: totals?.totalPayments || 0,
-    monthlyRevenue: monthly?.monthlyRevenue || 0,
-    monthlyPayments: monthly?.monthlyPayments || 0,
+    totalCollection: totals[0]?.totalCollection || 0,
+    totalPayments: totals[0]?.totalPayments || 0,
+    monthlyRevenue: monthly[0]?.monthlyRevenue || 0,
+    monthlyPayments: monthly[0]?.monthlyPayments || 0,
     monthLabel: label,
     currency: 'INR',
+    monthlyByCollector: monthlyByCollector.map((row) => ({
+      collector: row._id || 'Unknown',
+      revenue: row.revenue,
+      payments: row.payments,
+    })),
   }
 }
 
 const createPayment = async (req, res, next) => {
   try {
-    const { userId, paymentDate, amount, subscriptionType } = req.body
+    const { userId, paymentDate, amount, subscriptionType, collector } = req.body
 
     if (!userId) throw ApiError.badRequest('User is required')
     if (!paymentDate) throw ApiError.badRequest('Payment date is required')
@@ -56,6 +78,7 @@ const createPayment = async (req, res, next) => {
     if (!subscriptionType || !SUBSCRIPTION_TYPES.includes(subscriptionType)) {
       throw ApiError.badRequest('Valid subscription type is required')
     }
+    if (!collector?.trim()) throw ApiError.badRequest('Collector is required')
 
     const amountNum = Number(amount)
     if (Number.isNaN(amountNum) || amountNum < 1) {
@@ -64,6 +87,8 @@ const createPayment = async (req, res, next) => {
 
     const user = await User.findOne({ _id: userId, deletedAt: null, role: 'user' })
     if (!user) throw ApiError.notFound('User not found')
+
+    const collectorName = await validateCollectorName(collector)
 
     const parsedDate = new Date(paymentDate)
     if (Number.isNaN(parsedDate.getTime())) {
@@ -76,7 +101,9 @@ const createPayment = async (req, res, next) => {
       amount: Math.round(amountNum),
       subscriptionType,
       currency: 'INR',
+      collector: collectorName,
       recordedBy: req.user._id,
+      recordedByAdmin: getAdminDisplayName(req.user),
     })
 
     const populated = await PaymentHistory.findById(payment._id)
@@ -93,25 +120,39 @@ const createPayment = async (req, res, next) => {
 
 const listPayments = async (req, res, next) => {
   try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1)
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10))
+    const skip = (page - 1) * limit
+
     const filter = { deletedAt: null }
 
     if (req.query.subscriptionType && SUBSCRIPTION_TYPES.includes(req.query.subscriptionType)) {
       filter.subscriptionType = req.query.subscriptionType
     }
+    if (req.query.collector) {
+      filter.collector = req.query.collector
+    }
 
-    const [payments, stats] = await Promise.all([
+    const [payments, total, stats] = await Promise.all([
       PaymentHistory.find(filter)
         .sort({ paymentDate: -1, createdAt: -1 })
-        .limit(LATEST_PAYMENTS_LIMIT)
+        .skip(skip)
+        .limit(limit)
         .populate('user', 'keyId')
         .lean(),
+      PaymentHistory.countDocuments(filter),
       getPaymentStats(),
     ])
 
     return ApiResponse.success(res, {
       payments,
       stats,
-      limit: LATEST_PAYMENTS_LIMIT,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     })
   } catch (error) {
     next(error)

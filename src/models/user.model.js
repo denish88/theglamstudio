@@ -29,6 +29,24 @@ const userSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
     },
+    displayName: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: null,
+    },
+    createdByAdmin: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: null,
+    },
+    collector: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: null,
+    },
     password: {
       type: String,
       required: [true, 'Password is required'],

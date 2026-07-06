@@ -9,4 +9,6 @@ const PollVote = require('./pollVote.model')
 const Announcement = require('./announcement.model')
 const PaymentHistory = require('./paymentHistory.model')
 
-module.exports = { User, Post, Directory, Like, Contact, Rating, Poll, PollVote, Announcement, PaymentHistory }
+const MemberKeyCounter = require('./memberKeyCounter.model')
+
+module.exports = { User, Post, Directory, Like, Contact, Rating, Poll, PollVote, Announcement, PaymentHistory, MemberKeyCounter }
