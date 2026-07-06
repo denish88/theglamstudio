@@ -7,6 +7,7 @@
     "dev": "nodemon --config nodemon.json src/server.js",
     "start": "NODE_ENV=production node src/server.js",
     "seed": "node src/seed.js",
+    "migrate:payment-collector": "node src/scripts/backfillPaymentCollector.js",
     "build:client": "cd ../theglam && npm run build && rm -rf ../theglamserver/public && mv dist ../theglamserver/public"
   },
   "keywords": [],
