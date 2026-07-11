@@ -114,6 +114,33 @@ const confirmAgeConsent = async (req, res, next) => {
   }
 }
 
+const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body
+
+    if (currentPassword === newPassword) {
+      throw ApiError.badRequest('New password must be different from the current password')
+    }
+
+    const user = await User.findById(req.user._id).select('+password')
+    if (!user) {
+      throw ApiError.notFound('User not found')
+    }
+
+    const isMatch = await user.comparePassword(currentPassword)
+    if (!isMatch) {
+      throw ApiError.badRequest('Current password is incorrect')
+    }
+
+    user.password = newPassword
+    await user.save()
+
+    ApiResponse.success(res, {}, 'Password changed successfully')
+  } catch (error) {
+    next(error)
+  }
+}
+
 const refreshAccessToken = async (req, res, next) => {
   try {
     const { refreshToken } = req.body
@@ -156,5 +183,6 @@ module.exports = {
   logout,
   getMe,
   confirmAgeConsent,
+  changePassword,
   refreshAccessToken,
 }
