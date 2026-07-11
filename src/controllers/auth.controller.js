@@ -141,6 +141,143 @@ const changePassword = async (req, res, next) => {
   }
 }
 
+const PIN_REGEX = /^\d{4}$/
+const MAX_PIN_ATTEMPTS = 5
+const PIN_COOLDOWN_MS = 60 * 1000
+
+const setScreenLock = async (req, res, next) => {
+  try {
+    const { pin, currentPin } = req.body
+
+    if (!PIN_REGEX.test(String(pin || ''))) {
+      throw ApiError.badRequest('PIN must be exactly 4 digits')
+    }
+
+    const user = await User.findById(req.user._id).select('+screenLockPin')
+    if (!user) {
+      throw ApiError.notFound('User not found')
+    }
+
+    if (user.screenLockEnabled && user.screenLockPin) {
+      if (!PIN_REGEX.test(String(currentPin || ''))) {
+        throw ApiError.badRequest('Current PIN is required to change the screen lock')
+      }
+      if (String(currentPin) !== String(user.screenLockPin)) {
+        throw ApiError.badRequest('Current PIN is incorrect')
+      }
+      if (String(pin) === String(user.screenLockPin)) {
+        throw ApiError.badRequest('New PIN must be different from the current PIN')
+      }
+    }
+
+    user.screenLockPin = String(pin)
+    user.screenLockEnabled = true
+    user.screenLockLocked = false
+    user.screenLockAttempts = 0
+    user.screenLockLockedUntil = null
+    await user.save({ validateBeforeSave: false })
+
+    ApiResponse.success(res, user.toSafeObject(), 'Screen lock saved')
+  } catch (error) {
+    next(error)
+  }
+}
+
+const lockScreen = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id)
+    if (!user) {
+      throw ApiError.notFound('User not found')
+    }
+
+    if (!user.screenLockEnabled) {
+      throw ApiError.badRequest('Screen lock is not set up')
+    }
+
+    user.screenLockLocked = true
+    await user.save({ validateBeforeSave: false })
+
+    ApiResponse.success(res, user.toSafeObject(), 'Screen locked')
+  } catch (error) {
+    next(error)
+  }
+}
+
+const verifyScreenLock = async (req, res, next) => {
+  try {
+    const { pin } = req.body
+
+    const user = await User.findById(req.user._id).select(
+      '+screenLockPin +screenLockAttempts +screenLockLockedUntil',
+    )
+    if (!user) {
+      throw ApiError.notFound('User not found')
+    }
+
+    if (!user.screenLockEnabled || !user.screenLockPin) {
+      throw ApiError.badRequest('Screen lock is not set up')
+    }
+
+    if (user.screenLockLockedUntil && user.screenLockLockedUntil > new Date()) {
+      const waitSeconds = Math.ceil((user.screenLockLockedUntil - new Date()) / 1000)
+      throw ApiError.tooMany(`Too many attempts. Try again in ${waitSeconds}s`)
+    }
+
+    if (!PIN_REGEX.test(String(pin || '')) || String(pin) !== String(user.screenLockPin)) {
+      user.screenLockAttempts = (user.screenLockAttempts || 0) + 1
+
+      let message = 'Incorrect PIN'
+      if (user.screenLockAttempts >= MAX_PIN_ATTEMPTS) {
+        user.screenLockAttempts = 0
+        user.screenLockLockedUntil = new Date(Date.now() + PIN_COOLDOWN_MS)
+        message = `Too many attempts. Try again in ${PIN_COOLDOWN_MS / 1000}s`
+      }
+
+      await user.save({ validateBeforeSave: false })
+      throw ApiError.badRequest(message)
+    }
+
+    user.screenLockLocked = false
+    user.screenLockAttempts = 0
+    user.screenLockLockedUntil = null
+    await user.save({ validateBeforeSave: false })
+
+    ApiResponse.success(res, user.toSafeObject(), 'Unlocked')
+  } catch (error) {
+    next(error)
+  }
+}
+
+const disableScreenLock = async (req, res, next) => {
+  try {
+    const { pin } = req.body
+
+    const user = await User.findById(req.user._id).select('+screenLockPin')
+    if (!user) {
+      throw ApiError.notFound('User not found')
+    }
+
+    if (!user.screenLockEnabled || !user.screenLockPin) {
+      throw ApiError.badRequest('Screen lock is not set up')
+    }
+
+    if (String(pin) !== String(user.screenLockPin)) {
+      throw ApiError.badRequest('Incorrect PIN')
+    }
+
+    user.screenLockPin = null
+    user.screenLockEnabled = false
+    user.screenLockLocked = false
+    user.screenLockAttempts = 0
+    user.screenLockLockedUntil = null
+    await user.save({ validateBeforeSave: false })
+
+    ApiResponse.success(res, user.toSafeObject(), 'Screen lock removed')
+  } catch (error) {
+    next(error)
+  }
+}
+
 const refreshAccessToken = async (req, res, next) => {
   try {
     const { refreshToken } = req.body
@@ -184,5 +321,9 @@ module.exports = {
   getMe,
   confirmAgeConsent,
   changePassword,
+  setScreenLock,
+  lockScreen,
+  verifyScreenLock,
+  disableScreenLock,
   refreshAccessToken,
 }

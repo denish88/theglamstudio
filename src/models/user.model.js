@@ -118,6 +118,29 @@ const userSchema = new mongoose.Schema(
       type: String,
       select: false,
     },
+    screenLockPin: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    screenLockEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    screenLockLocked: {
+      type: Boolean,
+      default: false,
+    },
+    screenLockAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
+    screenLockLockedUntil: {
+      type: Date,
+      default: null,
+      select: false,
+    },
     deletedAt: {
       type: Date,
       default: null,
@@ -176,6 +199,10 @@ userSchema.methods.toSafeObject = function () {
     isActive: this.isActive,
     ageConsentConfirmed: !!this.ageConsentConfirmed,
     ageConsentConfirmedAt: this.ageConsentConfirmedAt || null,
+    screenLock: {
+      enabled: !!this.screenLockEnabled,
+      locked: !!this.screenLockLocked,
+    },
   }
 }
 
