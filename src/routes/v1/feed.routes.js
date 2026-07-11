@@ -5,6 +5,7 @@ const { authenticate } = require('../../middlewares')
 router.use(authenticate)
 
 router.get('/home', feedController.getHomeFeed)
+router.get('/directories', feedController.getDirectories)
 router.get('/posts/stats', feedController.getPostStats)
 router.get('/posts', feedController.getPosts)
 router.get('/posts/:id', feedController.getPostById)

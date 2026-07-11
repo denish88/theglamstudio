@@ -1,4 +1,5 @@
-const { Post, Like } = require('../models')
+const mongoose = require('mongoose')
+const { Post, Like, Directory } = require('../models')
 const { ApiError, ApiResponse, buildMediaUrls, getISTDayBounds } = require('../utils')
 const { getHomeStats } = require('../utils/homeStats')
 
@@ -64,6 +65,13 @@ const getPosts = async (req, res, next) => {
         throw ApiError.badRequest('Category must be 0, 1, 2, 3, 4 or 5')
       }
       filter.category = cat
+    }
+
+    if (req.query.directory) {
+      if (!mongoose.Types.ObjectId.isValid(req.query.directory)) {
+        throw ApiError.badRequest('Invalid directory')
+      }
+      filter.directory = req.query.directory
     }
 
     if (req.query.today === 'true') {
@@ -138,6 +146,48 @@ const getPostById = async (req, res, next) => {
   }
 }
 
+const getDirectories = async (req, res, next) => {
+  try {
+    const match = { deletedAt: null, isActive: true }
+
+    if (req.query.category !== undefined) {
+      const cat = Number(req.query.category)
+      if (![0, 1, 2, 3, 4, 5].includes(cat)) {
+        throw ApiError.badRequest('Category must be 0, 1, 2, 3, 4 or 5')
+      }
+      match.category = cat
+    }
+
+    const grouped = await Post.aggregate([
+      { $match: match },
+      { $group: { _id: '$directory', count: { $sum: 1 } } },
+    ])
+
+    const dirIds = grouped.map((g) => g._id).filter(Boolean)
+    const directories = await Directory.find({
+      _id: { $in: dirIds },
+      deletedAt: null,
+      isActive: true,
+    })
+      .select('name')
+      .lean()
+
+    const countMap = new Map(grouped.map((g) => [String(g._id), g.count]))
+
+    const result = directories
+      .map((d) => ({
+        _id: d._id,
+        name: d.name,
+        count: countMap.get(String(d._id)) || 0,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    ApiResponse.success(res, { directories: result })
+  } catch (error) {
+    next(error)
+  }
+}
+
 const getPostStats = async (req, res, next) => {
   try {
     const stats = await getHomeStats()
@@ -186,5 +236,6 @@ module.exports = {
   getPosts,
   getPostById,
   getPostStats,
+  getDirectories,
   toggleLike,
 }
