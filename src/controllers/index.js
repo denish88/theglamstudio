@@ -10,6 +10,7 @@ const ratingController = require('./rating.controller')
 const pollController = require('./poll.controller')
 const announcementController = require('./announcement.controller')
 const paymentHistoryController = require('./paymentHistory.controller')
+const activityController = require('./activity.controller')
 
 module.exports = {
   authController,
@@ -24,4 +25,5 @@ module.exports = {
   pollController,
   announcementController,
   paymentHistoryController,
+  activityController,
 }

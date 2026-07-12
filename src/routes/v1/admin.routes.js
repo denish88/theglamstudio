@@ -1,8 +1,11 @@
 const router = require('express').Router()
-const { userController, directoryController, postController, contactController, ratingController, pollController, announcementController, paymentHistoryController } = require('../../controllers')
+const { userController, directoryController, postController, contactController, ratingController, pollController, announcementController, paymentHistoryController, activityController } = require('../../controllers')
 const { authenticate, adminOnly, upload, uploadTimeout } = require('../../middlewares')
 
 router.use(authenticate, adminOnly)
+
+// ── User activity / fraud detection ──
+router.get('/activity/suspicious', activityController.getSuspiciousUsers)
 
 // ── User management ──
 router.post('/users', userController.createUser)

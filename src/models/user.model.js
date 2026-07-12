@@ -2,6 +2,9 @@ const mongoose = require('mongoose')
 const bcrypt = require('bcryptjs')
 const crypto = require('crypto')
 
+// Number of recent logins retained per user (used for activity / fraud tracking)
+const LOGIN_ACTIVITY_LIMIT = 30
+
 function generateReferralCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
   let code = ''
@@ -16,6 +19,7 @@ const loginActivitySchema = new mongoose.Schema(
     timestamp: { type: Date, default: Date.now },
     ipAddress: { type: String, default: null },
     browserFingerprint: { type: String, default: null },
+    deviceId: { type: String, default: null },
   },
   { _id: false },
 )
@@ -163,14 +167,15 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password)
 }
 
-userSchema.methods.addLoginActivity = function (ipAddress, browserFingerprint) {
+userSchema.methods.addLoginActivity = function (ipAddress, browserFingerprint, deviceId) {
   this.loginActivity.unshift({
     timestamp: new Date(),
     ipAddress,
     browserFingerprint,
+    deviceId: deviceId || null,
   })
-  if (this.loginActivity.length > 10) {
-    this.loginActivity = this.loginActivity.slice(0, 10)
+  if (this.loginActivity.length > LOGIN_ACTIVITY_LIMIT) {
+    this.loginActivity = this.loginActivity.slice(0, LOGIN_ACTIVITY_LIMIT)
   }
 }
 

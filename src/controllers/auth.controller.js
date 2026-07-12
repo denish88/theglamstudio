@@ -16,7 +16,7 @@ const { normalizeKeyId } = require('../utils/keyId')
 
 const login = async (req, res, next) => {
   try {
-    const { keyId, password } = req.body
+    const { keyId, password, deviceFingerprint } = req.body
 
     const normalizedKeyId = normalizeKeyId(keyId)
     if (!normalizedKeyId) {
@@ -51,7 +51,7 @@ const login = async (req, res, next) => {
     user.deviceId = deviceKeyID
     user.refreshToken = refreshToken
     user.ipAddress = ipAddress
-    user.addLoginActivity(ipAddress, browserFingerprint)
+    user.addLoginActivity(ipAddress, browserFingerprint, deviceFingerprint)
     await user.save({ validateBeforeSave: false })
 
     setMediaCookie(res, accessToken)
