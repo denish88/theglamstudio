@@ -38,10 +38,10 @@ async function refreshDirectoryCount(directoryId) {
 
 async function processAndUploadImages(files) {
   return processInBatches(files, IMAGE_PROCESS_CONCURRENCY, async (file) => {
-    const optimized = await optimizeImage(file.buffer)
-    const filename = `${uuidv4()}.webp`
+    const { buffer, ext, contentType } = await optimizeImage(file.buffer, file.mimetype)
+    const filename = `${uuidv4()}.${ext}`
     const key = buildR2Key(filename)
-    await uploadToR2(optimized, key, 'image/webp')
+    await uploadToR2(buffer, key, contentType)
     return key
   })
 }

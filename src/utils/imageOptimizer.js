@@ -1,9 +1,12 @@
 const sharp = require('sharp')
 
-const MAX_WIDTH = 1440
-const MAX_HEIGHT = 1440
-const SIZE_THRESHOLD = 1024 * 1024
-const WEBP_QUALITY = 82
+// All images are converted to high-quality WebP. Images are only downscaled
+// when they exceed the max dimensions or the size threshold; otherwise the
+// original resolution is kept and just re-encoded to WebP at high quality.
+const SIZE_THRESHOLD = 3 * 1024 * 1024 // 3 MB
+const MAX_WIDTH = 2560
+const MAX_HEIGHT = 2560
+const WEBP_QUALITY = 95
 
 async function optimizeImage(buffer) {
   const metadata = await sharp(buffer).metadata()
@@ -26,9 +29,11 @@ async function optimizeImage(buffer) {
     })
   }
 
-  return pipeline
-    .webp({ quality: WEBP_QUALITY, effort: 2, smartSubsample: true })
+  const optimized = await pipeline
+    .webp({ quality: WEBP_QUALITY, effort: 4, smartSubsample: true })
     .toBuffer()
+
+  return { buffer: optimized, ext: 'webp', contentType: 'image/webp' }
 }
 
 module.exports = { optimizeImage }
