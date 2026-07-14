@@ -2,7 +2,7 @@ const multer = require('multer')
 const path = require('path')
 
 const ALLOWED_MIMES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-const MAX_FILE_SIZE = 10 * 1024 * 1024
+const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20 MB per file
 
 const storage = multer.memoryStorage()
 
