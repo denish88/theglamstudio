@@ -42,4 +42,33 @@ async function optimizeImage(buffer) {
   return { buffer: optimized, ext: 'webp', contentType: 'image/webp' }
 }
 
-module.exports = { optimizeImage }
+/**
+ * Create a small square thumbnail for story circles on the home screen.
+ * Uses cover crop so the circle always fills cleanly.
+ */
+async function createStoryThumbnail(buffer) {
+  const thumb = await sharp(buffer, { failOn: 'none' })
+    .rotate()
+    .resize(240, 240, {
+      fit: 'cover',
+      position: 'centre',
+      withoutEnlargement: false,
+    })
+    .webp({ quality: 82, effort: 4 })
+    .toBuffer()
+
+  return { buffer: thumb, ext: 'webp', contentType: 'image/webp' }
+}
+
+/**
+ * Produce both the full story image (high quality WebP) and a circle thumbnail.
+ */
+async function createStoryImages(buffer) {
+  const [original, thumbnail] = await Promise.all([
+    optimizeImage(buffer),
+    createStoryThumbnail(buffer),
+  ])
+  return { original, thumbnail }
+}
+
+module.exports = { optimizeImage, createStoryThumbnail, createStoryImages }

@@ -1,5 +1,12 @@
 const router = require('express').Router()
-const { feedController, referralController, contactController, ratingController, pollController, announcementController } = require('../../controllers')
+const {
+  feedController,
+  referralController,
+  ratingController,
+  pollController,
+  announcementController,
+  storyController,
+} = require('../../controllers')
 const { authenticate } = require('../../middlewares')
 
 router.use(authenticate)
@@ -14,7 +21,8 @@ router.post('/posts/:id/like', feedController.toggleLike)
 router.post('/referral/apply', referralController.applyReferralCode)
 router.get('/referral/my', referralController.getMyReferrals)
 
-router.post('/contact', contactController.submitContact)
+router.get('/story', storyController.getActiveStory)
+router.post('/story/view', storyController.markStoryViewed)
 
 router.post('/ratings', ratingController.submitRating)
 router.get('/ratings/my', ratingController.getMyRatings)

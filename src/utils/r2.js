@@ -47,6 +47,13 @@ function buildR2Key(filename) {
   return `posts/${year}/${month}/${filename}`
 }
 
+function buildStoryR2Key(filename) {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  return `stories/${year}/${month}/${filename}`
+}
+
 async function generateSignedImageUrl(key) {
   if (!key) return null
   const command = new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
@@ -64,6 +71,7 @@ module.exports = {
   buildMediaUrl,
   buildMediaUrls,
   buildR2Key,
+  buildStoryR2Key,
   generateSignedImageUrl,
   generateSignedUrls,
 }

@@ -2,6 +2,7 @@ const mongoose = require('mongoose')
 const { Post, Like, Directory } = require('../models')
 const { ApiError, ApiResponse, buildMediaUrls, getISTDayBounds } = require('../utils')
 const { getHomeStats } = require('../utils/homeStats')
+const { getActiveStoryForFeed } = require('./story.controller')
 
 const HOME_PREVIEW_LIMIT = 3
 
@@ -15,13 +16,14 @@ const getHomeFeed = async (req, res, next) => {
     }
     const fetchLimit = HOME_PREVIEW_LIMIT + 1
 
-    const [stats, posts] = await Promise.all([
+    const [stats, posts, story] = await Promise.all([
       getHomeStats(),
       Post.find(postFilter)
         .select('_id imageUrl category createdAt')
         .sort({ _id: -1 })
         .limit(fetchLimit)
         .lean(),
+      getActiveStoryForFeed(req.user._id),
     ])
 
     const hasMoreToday = posts.length > HOME_PREVIEW_LIMIT
@@ -43,6 +45,7 @@ const getHomeFeed = async (req, res, next) => {
     ApiResponse.success(res, {
       totalPosts: stats.totalPosts,
       announcement: stats.announcement,
+      story,
       latestPosts,
       hasMoreToday,
     })

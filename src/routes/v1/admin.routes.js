@@ -1,5 +1,15 @@
 const router = require('express').Router()
-const { userController, directoryController, postController, contactController, ratingController, pollController, announcementController, paymentHistoryController, activityController } = require('../../controllers')
+const {
+  userController,
+  directoryController,
+  postController,
+  ratingController,
+  pollController,
+  announcementController,
+  paymentHistoryController,
+  activityController,
+  storyController,
+} = require('../../controllers')
 const { authenticate, adminOnly, upload, uploadTimeout } = require('../../middlewares')
 
 router.use(authenticate, adminOnly)
@@ -33,10 +43,11 @@ router.get('/posts/:id', postController.getPost)
 router.put('/posts/:id', uploadTimeout, upload.array('images', 20), postController.updatePost)
 router.delete('/posts/:id', postController.deletePost)
 
-// ── Contact queries ──
-router.get('/contacts', contactController.listContacts)
-router.patch('/contacts/:id/read', contactController.markAsRead)
-router.delete('/contacts/:id', contactController.deleteContact)
+// ── Story (single active story) ──
+router.get('/stories', storyController.getStory)
+router.post('/stories', uploadTimeout, upload.single('image'), storyController.createOrReplaceStory)
+router.patch('/stories/toggle-active', storyController.toggleStoryActive)
+router.delete('/stories', storyController.deleteStory)
 
 // ── Ratings ──
 router.get('/ratings', ratingController.listAllRatings)
