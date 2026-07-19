@@ -1,6 +1,6 @@
 const { v4: uuidv4 } = require('uuid')
 const { Post, Directory } = require('../models')
-const { ApiError, ApiResponse, uploadToR2, deleteFromR2, generateSignedUrls, buildR2Key, optimizeImage } = require('../utils')
+const { ApiError, ApiResponse, uploadToR2, deleteFromR2, buildMediaUrls, buildR2Key, optimizeImage } = require('../utils')
 const { processInBatches } = require('../utils/processInBatches')
 const { invalidateHomeStats } = require('../utils/homeStats')
 
@@ -22,11 +22,12 @@ function parseJsonArray(value) {
   }
 }
 
-async function formatPostResponse(post) {
+function formatPostResponse(post) {
   const obj = typeof post.toObject === 'function' ? post.toObject() : { ...post }
   const keys = [...(obj.imageUrl || [])]
   obj.imageKeys = keys
-  obj.imageUrl = await generateSignedUrls(keys)
+  // Same-origin media proxy (auth + anti-hotlink) — never expose raw R2 signed URLs
+  obj.imageUrl = buildMediaUrls(keys)
   return obj
 }
 
@@ -81,7 +82,7 @@ const createPost = async (req, res, next) => {
 
     await refreshDirectoryCount(dir._id)
 
-    const postObj = await formatPostResponse(post)
+    const postObj = formatPostResponse(post)
 
     invalidateHomeStats()
 
@@ -122,10 +123,10 @@ const listPosts = async (req, res, next) => {
       Post.countDocuments(filter),
     ])
 
-    const postsWithSignedUrls = await Promise.all(posts.map((post) => formatPostResponse(post)))
+    const formattedPosts = posts.map((post) => formatPostResponse(post))
 
     ApiResponse.success(res, {
-      posts: postsWithSignedUrls,
+      posts: formattedPosts,
       pagination: {
         page,
         limit,
@@ -148,7 +149,7 @@ const getPost = async (req, res, next) => {
       throw ApiError.notFound('Post not found')
     }
 
-    const postObj = await formatPostResponse(post)
+    const postObj = formatPostResponse(post)
 
     ApiResponse.success(res, postObj)
   } catch (error) {
@@ -211,7 +212,7 @@ const updatePost = async (req, res, next) => {
       ])
     }
 
-    const postObj = await formatPostResponse(post)
+    const postObj = formatPostResponse(post)
 
     ApiResponse.success(res, postObj, 'Post updated')
   } catch (error) {
@@ -235,7 +236,7 @@ const updatePostCategory = async (req, res, next) => {
     post.category = Number(category)
     await post.save()
 
-    const postObj = await formatPostResponse(post)
+    const postObj = formatPostResponse(post)
 
     ApiResponse.success(res, postObj, 'Post category updated')
   } catch (error) {

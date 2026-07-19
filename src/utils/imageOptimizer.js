@@ -71,4 +71,34 @@ async function createStoryImages(buffer) {
   return { original, thumbnail }
 }
 
-module.exports = { optimizeImage, createStoryThumbnail, createStoryImages }
+/**
+ * Gift box preview: keep full image in frame (no cover crop).
+ */
+async function createGiftBoxThumbnail(buffer) {
+  const thumb = await sharp(buffer, { failOn: 'none' })
+    .rotate()
+    .resize(480, 480, {
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .webp({ quality: 85, effort: 4 })
+    .toBuffer()
+
+  return { buffer: thumb, ext: 'webp', contentType: 'image/webp' }
+}
+
+async function createGiftBoxImages(buffer) {
+  const [original, thumbnail] = await Promise.all([
+    optimizeImage(buffer),
+    createGiftBoxThumbnail(buffer),
+  ])
+  return { original, thumbnail }
+}
+
+module.exports = {
+  optimizeImage,
+  createStoryThumbnail,
+  createStoryImages,
+  createGiftBoxThumbnail,
+  createGiftBoxImages,
+}

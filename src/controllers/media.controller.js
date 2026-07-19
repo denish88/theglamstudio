@@ -10,7 +10,10 @@ const streamMedia = async (req, res, next) => {
     const rawSplat = req.params.splat
     const key = Array.isArray(rawSplat) ? rawSplat.join('/') : rawSplat
 
-    const isAllowedPrefix = key.startsWith('posts/') || key.startsWith('stories/')
+    const isAllowedPrefix =
+      key.startsWith('posts/') ||
+      key.startsWith('stories/') ||
+      key.startsWith('giftboxes/')
     if (!key || key.includes('..') || !isAllowedPrefix) {
       throw ApiError.badRequest('Invalid media path')
     }

@@ -6,6 +6,7 @@ const {
   pollController,
   announcementController,
   storyController,
+  giftBoxController,
 } = require('../../controllers')
 const { authenticate } = require('../../middlewares')
 
@@ -23,6 +24,8 @@ router.get('/referral/my', referralController.getMyReferrals)
 
 router.get('/story', storyController.getActiveStory)
 router.post('/story/view', storyController.markStoryViewed)
+
+router.get('/giftbox', giftBoxController.getActiveGiftBox)
 
 router.post('/ratings', ratingController.submitRating)
 router.get('/ratings/my', ratingController.getMyRatings)

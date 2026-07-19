@@ -9,6 +9,7 @@ const {
   paymentHistoryController,
   activityController,
   storyController,
+  giftBoxController,
 } = require('../../controllers')
 const { authenticate, adminOnly, upload, uploadTimeout } = require('../../middlewares')
 
@@ -48,6 +49,13 @@ router.get('/stories', storyController.getStory)
 router.post('/stories', uploadTimeout, upload.single('image'), storyController.createOrReplaceStory)
 router.patch('/stories/toggle-active', storyController.toggleStoryActive)
 router.delete('/stories', storyController.deleteStory)
+
+// ── Gift Box (downloadable home gifts) ──
+router.get('/giftboxes', giftBoxController.getGiftBox)
+router.post('/giftboxes', uploadTimeout, upload.array('images', 12), giftBoxController.saveGiftBox)
+router.patch('/giftboxes/toggle-active', giftBoxController.toggleGiftBoxActive)
+router.delete('/giftboxes/images/:imageId', giftBoxController.deleteGiftImage)
+router.delete('/giftboxes', giftBoxController.deleteGiftBox)
 
 // ── Ratings ──
 router.get('/ratings', ratingController.listAllRatings)

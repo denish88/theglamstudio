@@ -11,6 +11,7 @@ const announcementController = require('./announcement.controller')
 const paymentHistoryController = require('./paymentHistory.controller')
 const activityController = require('./activity.controller')
 const storyController = require('./story.controller')
+const giftBoxController = require('./giftBox.controller')
 
 module.exports = {
   authController,
@@ -26,4 +27,5 @@ module.exports = {
   paymentHistoryController,
   activityController,
   storyController,
+  giftBoxController,
 }

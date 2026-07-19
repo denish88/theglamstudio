@@ -3,6 +3,7 @@ const { Post, Like, Directory } = require('../models')
 const { ApiError, ApiResponse, buildMediaUrls, getISTDayBounds } = require('../utils')
 const { getHomeStats } = require('../utils/homeStats')
 const { getActiveStoryForFeed } = require('./story.controller')
+const { getActiveGiftBoxForFeed } = require('./giftBox.controller')
 
 const HOME_PREVIEW_LIMIT = 3
 
@@ -16,7 +17,7 @@ const getHomeFeed = async (req, res, next) => {
     }
     const fetchLimit = HOME_PREVIEW_LIMIT + 1
 
-    const [stats, posts, story] = await Promise.all([
+    const [stats, posts, story, giftBox] = await Promise.all([
       getHomeStats(),
       Post.find(postFilter)
         .select('_id imageUrl category createdAt')
@@ -24,6 +25,7 @@ const getHomeFeed = async (req, res, next) => {
         .limit(fetchLimit)
         .lean(),
       getActiveStoryForFeed(req.user._id),
+      getActiveGiftBoxForFeed(),
     ])
 
     const hasMoreToday = posts.length > HOME_PREVIEW_LIMIT
@@ -46,6 +48,7 @@ const getHomeFeed = async (req, res, next) => {
       totalPosts: stats.totalPosts,
       announcement: stats.announcement,
       story,
+      giftBox,
       latestPosts,
       hasMoreToday,
     })
