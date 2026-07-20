@@ -34,12 +34,35 @@ async function fetchActiveAnnouncement() {
 }
 
 async function fetchHomeStats() {
-  const [totalPosts, announcement] = await Promise.all([
-    Post.countDocuments({ deletedAt: null, isActive: true }),
+  const [postAgg, announcement] = await Promise.all([
+    Post.aggregate([
+      { $match: { deletedAt: null, isActive: true } },
+      {
+        $group: {
+          _id: null,
+          totalPosts: { $sum: 1 },
+          totalPhotos: {
+            $sum: {
+              $cond: [
+                { $isArray: '$imageUrl' },
+                { $size: '$imageUrl' },
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]),
     fetchActiveAnnouncement(),
   ])
 
-  return { totalPosts, announcement }
+  const totals = postAgg[0] || { totalPosts: 0, totalPhotos: 0 }
+
+  return {
+    totalPosts: totals.totalPosts || 0,
+    totalPhotos: totals.totalPhotos || 0,
+    announcement,
+  }
 }
 
 function getHomeStats() {

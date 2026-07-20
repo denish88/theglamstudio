@@ -46,6 +46,7 @@ const getHomeFeed = async (req, res, next) => {
 
     ApiResponse.success(res, {
       totalPosts: stats.totalPosts,
+      totalPhotos: stats.totalPhotos,
       announcement: stats.announcement,
       story,
       giftBox,
@@ -197,7 +198,10 @@ const getDirectories = async (req, res, next) => {
 const getPostStats = async (req, res, next) => {
   try {
     const stats = await getHomeStats()
-    ApiResponse.success(res, { totalPosts: stats.totalPosts })
+    ApiResponse.success(res, {
+      totalPosts: stats.totalPosts,
+      totalPhotos: stats.totalPhotos,
+    })
   } catch (error) {
     next(error)
   }

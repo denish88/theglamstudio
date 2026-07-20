@@ -1,5 +1,11 @@
 const { User } = require('../models')
-const { ApiError, ApiResponse } = require('../utils')
+const crypto = require('crypto')
+const { FRONTEND_URL } = require('../config/env')
+const {
+  ApiError,
+  ApiResponse,
+  generatePasswordResetToken,
+} = require('../utils')
 const {
   generateNextMemberKeyId,
   formatMemberKeyIdDisplay,
@@ -295,6 +301,46 @@ const updateUserPoints = async (req, res, next) => {
   }
 }
 
+/**
+ * Admin generates a one-time password reset link (JWT valid 10 minutes).
+ */
+const createPasswordResetLink = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ _id: req.params.id, deletedAt: null }).select(
+      '+passwordResetNonce',
+    )
+    if (!user) {
+      throw ApiError.notFound('User not found')
+    }
+
+    if (user.role === 'admin' && String(user._id) === String(req.user._id)) {
+      throw ApiError.badRequest('Use Settings to change your own password')
+    }
+
+    const nonce = crypto.randomBytes(24).toString('hex')
+    user.passwordResetNonce = nonce
+    await user.save({ validateBeforeSave: false })
+
+    const token = generatePasswordResetToken(user._id, user.keyId, nonce)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
+    const base = String(FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '')
+    const resetUrl = `${base}/reset-password?token=${encodeURIComponent(token)}`
+
+    ApiResponse.success(
+      res,
+      {
+        resetUrl,
+        expiresAt,
+        keyId: formatMemberKeyIdDisplay(user.keyId) || user.keyId,
+        expiresInMinutes: 10,
+      },
+      'Password reset link created (valid for 10 minutes)',
+    )
+  } catch (error) {
+    next(error)
+  }
+}
+
 module.exports = {
   listCollectors,
   createUser,
@@ -305,4 +351,5 @@ module.exports = {
   toggleUserActive,
   deleteUser,
   updateUserPoints,
+  createPasswordResetLink,
 }

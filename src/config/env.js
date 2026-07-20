@@ -14,6 +14,7 @@ module.exports = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
+  FRONTEND_URL: process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173',
   CRYPTO_SECRET: process.env.CRYPTO_SECRET || 'theglamclub-shared-crypto-key-2026!',
   ENABLE_ENCRYPTION: process.env.ENABLE_ENCRYPTION === 'true',
 

@@ -56,6 +56,12 @@ const userSchema = new mongoose.Schema(
       minlength: 6,
       select: false,
     },
+    /** One-time nonce embedded in admin password-reset JWTs */
+    passwordResetNonce: {
+      type: String,
+      default: null,
+      select: false,
+    },
     role: {
       type: String,
       enum: ['user', 'admin'],

@@ -27,6 +27,7 @@ router.get('/users/:id', userController.getUserDetail)
 router.get('/users/:id/referrals', userController.getReferralStats)
 router.patch('/users/:id/toggle-active', userController.toggleUserActive)
 router.patch('/users/:id/points', userController.updateUserPoints)
+router.post('/users/:id/password-reset-link', userController.createPasswordResetLink)
 router.delete('/users/:id', userController.deleteUser)
 
 // ── Directory management ──

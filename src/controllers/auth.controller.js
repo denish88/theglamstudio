@@ -1,6 +1,17 @@
 const { User } = require('../models')
-const { ApiError, ApiResponse, generateAccessToken, generateRefreshToken, verifyToken, setMediaCookie, clearMediaCookie } = require('../utils')
+const {
+  ApiError,
+  ApiResponse,
+  generateAccessToken,
+  generateRefreshToken,
+  verifyToken,
+  setMediaCookie,
+  clearMediaCookie,
+  PASSWORD_RESET_TYPE,
+} = require('../utils')
 const crypto = require('crypto')
+const { formatMemberKeyIdDisplay } = require('../utils/memberKeyId')
+const { normalizeKeyId } = require('../utils/keyId')
 
 function generateDeviceKeyID() {
   const seg = () => {
@@ -12,7 +23,24 @@ function generateDeviceKeyID() {
   return `${seg()}-${seg()}-${seg()}-${seg()}-${seg()}`
 }
 
-const { normalizeKeyId } = require('../utils/keyId')
+function assertPasswordResetToken(token) {
+  if (!token || typeof token !== 'string') {
+    throw ApiError.badRequest('Reset token is required')
+  }
+
+  let decoded
+  try {
+    decoded = verifyToken(token)
+  } catch {
+    throw ApiError.badRequest('Reset link is invalid or has expired')
+  }
+
+  if (decoded.type !== PASSWORD_RESET_TYPE || !decoded.id || !decoded.nonce) {
+    throw ApiError.badRequest('Reset link is invalid or has expired')
+  }
+
+  return decoded
+}
 
 const login = async (req, res, next) => {
   try {
@@ -136,6 +164,64 @@ const changePassword = async (req, res, next) => {
     await user.save()
 
     ApiResponse.success(res, {}, 'Password changed successfully')
+  } catch (error) {
+    next(error)
+  }
+}
+
+const validatePasswordReset = async (req, res, next) => {
+  try {
+    const token = req.query.token || req.body?.token
+    const decoded = assertPasswordResetToken(token)
+
+    const user = await User.findOne({
+      _id: decoded.id,
+      deletedAt: null,
+    }).select('+passwordResetNonce')
+
+    if (!user || !user.isActive || user.passwordResetNonce !== decoded.nonce) {
+      throw ApiError.badRequest('Reset link is invalid or has expired')
+    }
+
+    ApiResponse.success(res, {
+      keyId: formatMemberKeyIdDisplay(user.keyId) || user.keyId,
+      expiresAt: decoded.exp ? new Date(decoded.exp * 1000).toISOString() : null,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+const resetPasswordWithToken = async (req, res, next) => {
+  try {
+    const { token, newPassword } = req.body
+
+    if (!newPassword || String(newPassword).length < 6) {
+      throw ApiError.badRequest('Password must be at least 6 characters')
+    }
+
+    const decoded = assertPasswordResetToken(token)
+
+    const user = await User.findOne({
+      _id: decoded.id,
+      deletedAt: null,
+    }).select('+password +passwordResetNonce +refreshToken')
+
+    if (!user || !user.isActive || user.passwordResetNonce !== decoded.nonce) {
+      throw ApiError.badRequest('Reset link is invalid or has expired')
+    }
+
+    user.password = String(newPassword)
+    user.passwordResetNonce = null
+    user.refreshToken = null
+    user.deviceId = null
+    await user.save()
+
+    ApiResponse.success(
+      res,
+      { keyId: formatMemberKeyIdDisplay(user.keyId) || user.keyId },
+      'Password updated successfully. You can now log in.',
+    )
   } catch (error) {
     next(error)
   }
@@ -321,6 +407,8 @@ module.exports = {
   getMe,
   confirmAgeConsent,
   changePassword,
+  validatePasswordReset,
+  resetPasswordWithToken,
   setScreenLock,
   lockScreen,
   verifyScreenLock,

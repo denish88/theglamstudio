@@ -25,6 +25,15 @@ router.post('/logout', authenticate, authController.logout)
 router.get('/me', authenticate, authController.getMe)
 router.post('/age-consent', authenticate, authController.confirmAgeConsent)
 router.post('/change-password', authenticate, validate(changePasswordSchema), authController.changePassword)
+router.get('/password-reset/validate', authController.validatePasswordReset)
+router.post(
+  '/password-reset',
+  validate({
+    token: { required: true, type: 'string' },
+    newPassword: { required: true, type: 'string', minLength: 6 },
+  }),
+  authController.resetPasswordWithToken,
+)
 router.post('/screen-lock', authenticate, validate(setScreenLockSchema), authController.setScreenLock)
 router.post('/screen-lock/lock', authenticate, authController.lockScreen)
 router.post('/screen-lock/verify', authenticate, validate(verifyScreenLockSchema), authController.verifyScreenLock)
