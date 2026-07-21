@@ -12,6 +12,7 @@ const {
 const crypto = require('crypto')
 const { formatMemberKeyIdDisplay } = require('../utils/memberKeyId')
 const { normalizeKeyId } = require('../utils/keyId')
+const { getClientIp } = require('../utils/ipGeo')
 
 function generateDeviceKeyID() {
   const seg = () => {
@@ -73,7 +74,7 @@ const login = async (req, res, next) => {
     const accessToken = generateAccessToken(user._id, deviceKeyID)
     const refreshToken = generateRefreshToken(user._id, deviceKeyID)
 
-    const ipAddress = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || null
+    const ipAddress = getClientIp(req)
     const browserFingerprint = req.headers['user-agent'] || null
 
     user.deviceId = deviceKeyID

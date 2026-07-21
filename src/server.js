@@ -7,6 +7,10 @@ const UPLOAD_SERVER_TIMEOUT_MS = 15 * 60 * 1000 // keep in sync with uploadTimeo
 const start = async () => {
   await connectDB()
 
+  // Warm GeoLite2 City + ASN readers once (non-fatal if DBs missing)
+  const { initGeoDatabases } = require('./utils/ipGeo')
+  await initGeoDatabases()
+
   const server = app.listen(PORT, () => {
     console.log(`Server running in ${NODE_ENV} mode on port ${PORT}`)
     console.log(`API base: http://localhost:${PORT}/api/v1`)

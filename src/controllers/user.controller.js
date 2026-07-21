@@ -13,6 +13,11 @@ const {
   normalizeKeyId,
   validateCollectorName,
 } = require('../utils/memberKeyId')
+const {
+  normalizeIp,
+  lookupIpLocations,
+  formatLocationLabel,
+} = require('../utils/ipGeo')
 
 function generatePassword() {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
@@ -302,6 +307,102 @@ const updateUserPoints = async (req, res, next) => {
 }
 
 /**
+ * Collect unique login IPs for a user and resolve approximate locations.
+ */
+const getUserLocations = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ _id: req.params.id, deletedAt: null })
+      .select('keyId ipAddress ipDetails loginActivity')
+    if (!user) {
+      throw ApiError.notFound('User not found')
+    }
+
+    const activity = Array.isArray(user.loginActivity) ? user.loginActivity : []
+    const ipMap = new Map()
+
+    const bump = (rawIp, timestamp) => {
+      const ip = normalizeIp(rawIp)
+      if (!ip) return
+      const ts = timestamp ? new Date(timestamp).getTime() : 0
+      const existing = ipMap.get(ip)
+      if (existing) {
+        existing.count += 1
+        if (ts > existing.lastSeenTs) existing.lastSeenTs = ts
+      } else {
+        ipMap.set(ip, { ip, count: 1, lastSeenTs: ts })
+      }
+    }
+
+    for (const entry of activity) {
+      bump(entry?.ipAddress, entry?.timestamp)
+    }
+
+    const currentIp = normalizeIp(user.ipAddress)
+    if (currentIp && !ipMap.has(currentIp)) {
+      bump(currentIp, null)
+    }
+
+    const ips = Array.from(ipMap.keys())
+    if (ips.length === 0) {
+      return ApiResponse.success(res, {
+        keyId: formatMemberKeyIdDisplay(user.keyId) || user.keyId,
+        currentIp: null,
+        locations: [],
+      })
+    }
+
+    const { geoByIp, updatedCache } = await lookupIpLocations(ips, user.ipDetails || {})
+
+    const cacheChanged = JSON.stringify(user.ipDetails || {}) !== JSON.stringify(updatedCache)
+    if (cacheChanged) {
+      user.ipDetails = updatedCache
+      await user.save({ validateBeforeSave: false })
+    }
+
+    const locations = Array.from(ipMap.values())
+      .sort((a, b) => b.count - a.count || b.lastSeenTs - a.lastSeenTs)
+      .map((item) => {
+        const geo = geoByIp[item.ip] || null
+        return {
+          ip: item.ip,
+          count: item.count,
+          lastSeen: item.lastSeenTs ? new Date(item.lastSeenTs) : null,
+          isCurrent: item.ip === currentIp,
+          location: formatLocationLabel(geo),
+          geo: geo
+            ? {
+                status: geo.status,
+                message: geo.message || null,
+                city: geo.city,
+                region: geo.region,
+                country: geo.country,
+                countryCode: geo.countryCode,
+                zip: geo.zip,
+                lat: geo.lat,
+                lon: geo.lon,
+                isp: geo.isp,
+                org: geo.org,
+                asn: geo.asn ?? null,
+                timezone: geo.timezone,
+              }
+            : null,
+        }
+      })
+
+    ApiResponse.success(res, {
+      keyId: formatMemberKeyIdDisplay(user.keyId) || user.keyId,
+      currentIp,
+      locations,
+    })
+  } catch (error) {
+    if (error?.message?.includes('IP geolocation')) {
+      return next(ApiError.internal(error.message))
+    }
+    next(error)
+  }
+}
+
+/**
  * Admin generates a one-time password reset link (JWT valid 10 minutes).
  */
 const createPasswordResetLink = async (req, res, next) => {
@@ -346,6 +447,7 @@ module.exports = {
   createUser,
   listUsers,
   getUserDetail,
+  getUserLocations,
   getReferralStats,
   checkExpiredSubscriptions,
   toggleUserActive,
