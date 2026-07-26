@@ -3,6 +3,7 @@ const { Post, Directory } = require('../models')
 const { ApiError, ApiResponse, uploadToR2, deleteFromR2, buildMediaUrls, buildR2Key, optimizeImage } = require('../utils')
 const { processInBatches } = require('../utils/processInBatches')
 const { invalidateHomeStats } = require('../utils/homeStats')
+const { sanitizeCaption } = require('../utils/sanitizeCaption')
 
 const VALID_CATEGORIES = [0, 1, 2, 3, 4, 5]
 const IMAGE_PROCESS_CONCURRENCY = 4
@@ -74,7 +75,7 @@ const createPost = async (req, res, next) => {
 
     const post = await Post.create({
       imageUrl: uploadedKeys,
-      caption: caption || '',
+      caption: sanitizeCaption(caption),
       category: Number(category),
       directory: dir._id,
       isWatermarked: parseBoolean(isWatermarked),
@@ -167,7 +168,7 @@ const updatePost = async (req, res, next) => {
     const previousDirectoryId = post.directory?.toString()
     const { caption, category, isActive, isWatermarked, directory } = req.body
 
-    if (caption !== undefined) post.caption = caption
+    if (caption !== undefined) post.caption = sanitizeCaption(caption)
     if (category !== undefined) {
       const cat = Number(category)
       if (!VALID_CATEGORIES.includes(cat)) {
