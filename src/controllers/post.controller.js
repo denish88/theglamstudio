@@ -4,6 +4,7 @@ const { ApiError, ApiResponse, uploadToR2, deleteFromR2, buildMediaUrls, buildR2
 const { processInBatches } = require('../utils/processInBatches')
 const { invalidateHomeStats } = require('../utils/homeStats')
 const { sanitizeCaption } = require('../utils/sanitizeCaption')
+const { notifyNewPostPublished } = require('../utils/webPush')
 
 const VALID_CATEGORIES = [0, 1, 2, 3, 4, 5]
 const IMAGE_PROCESS_CONCURRENCY = 4
@@ -86,6 +87,9 @@ const createPost = async (req, res, next) => {
     const postObj = formatPostResponse(post)
 
     invalidateHomeStats()
+
+    // Fire-and-forget — never block/fail post creation on push errors
+    notifyNewPostPublished(postObj)
 
     ApiResponse.created(res, postObj, 'Post created')
   } catch (error) {

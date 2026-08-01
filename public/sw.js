@@ -27,6 +27,153 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(serveMedia(event.request))
 })
 
+self.addEventListener('push', (event) => {
+  let payload = {
+    title: 'The Glam Club 💎',
+    body: '🔥 New exclusive content has been uploaded!',
+    icon: '/logo.png',
+    badge: '/favicon.png',
+    data: { url: '/home' },
+  }
+
+  try {
+    if (event.data) {
+      const parsed = event.data.json()
+      payload = { ...payload, ...parsed }
+    }
+  } catch {
+    try {
+      const text = event.data?.text()
+      if (text) payload.body = text
+    } catch {
+      // keep defaults
+    }
+  }
+
+  const origin = self.location.origin
+  const icon = absoluteAsset(payload.icon, origin, '/logo.png')
+  const badge = absoluteAsset(payload.badge, origin, '/favicon.png')
+  const url = resolveClickUrl(payload?.data?.url, origin)
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title || 'The Glam Club 💎', {
+      body: payload.body || '',
+      icon,
+      badge,
+      tag: payload.tag || 'theglam-push',
+      renotify: payload.renotify !== false,
+      data: { ...(payload.data || {}), url },
+    })
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const targetUrl = resolveClickUrl(event.notification?.data?.url, self.location.origin)
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          client.focus()
+          if ('navigate' in client) {
+            return client.navigate(targetUrl)
+          }
+          return undefined
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl)
+      }
+      return undefined
+    })
+  )
+})
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(handleSubscriptionChange(event))
+})
+
+async function handleSubscriptionChange(event) {
+  try {
+    const applicationServerKey = await fetchVapidPublicKey()
+    if (!applicationServerKey) return
+
+    const subscription = await self.registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(applicationServerKey),
+    })
+
+    const apiBase = await resolveApiBase()
+    await fetch(`${apiBase}/push/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(subscription.toJSON()),
+      credentials: 'include',
+    })
+
+    if (event.oldSubscription?.endpoint) {
+      await fetch(`${apiBase}/push/unsubscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ endpoint: event.oldSubscription.endpoint }),
+        credentials: 'include',
+      })
+    }
+  } catch (error) {
+    console.error('[sw] pushsubscriptionchange failed', error)
+  }
+}
+
+async function fetchVapidPublicKey() {
+  try {
+    const apiBase = await resolveApiBase()
+    const res = await fetch(`${apiBase}/push/vapid-public-key`, {
+      headers: { Accept: 'application/json' },
+    })
+    if (!res.ok) return null
+    const json = await res.json()
+    return json?.data?.publicKey || json?.publicKey || null
+  } catch {
+    return null
+  }
+}
+
+async function resolveApiBase() {
+  // Prefer same-origin proxy in production builds served by the API
+  return `${self.location.origin}/api/v1`
+}
+
+function absoluteAsset(value, origin, fallbackPath) {
+  if (!value) return `${origin}${fallbackPath}`
+  if (/^https?:\/\//i.test(value)) return value
+  if (value.startsWith('/')) return `${origin}${value}`
+  return `${origin}/${value}`
+}
+
+function resolveClickUrl(value, origin) {
+  if (!value) return `${origin}/home`
+  try {
+    if (/^https?:\/\//i.test(value)) {
+      const parsed = new URL(value)
+      if (parsed.origin === origin) return parsed.href
+      return `${origin}${parsed.pathname}${parsed.search}${parsed.hash}`
+    }
+    return new URL(value, origin).href
+  } catch {
+    return `${origin}/home`
+  }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = atob(base64)
+  const output = new Uint8Array(raw.length)
+  for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i)
+  return output
+}
+
 async function serveMedia(request) {
   const cache = await caches.open(CACHE_NAME)
   const cacheKey = stripRetryParam(request.url)
@@ -34,7 +181,7 @@ async function serveMedia(request) {
 
   if (cached) {
     const ts = cached.headers.get('x-sw-ts')
-    if (ts && Date.now() - parseInt(ts, 10) < MAX_AGE) {
+    if (ts && Date.now() - Number.parseInt(ts, 10) < MAX_AGE) {
       return cached
     }
     await cache.delete(cacheKey)
@@ -49,7 +196,7 @@ async function serveMedia(request) {
 
     const blob = await response.clone().blob()
     const headers = new Headers(response.headers)
-    headers.set('x-sw-ts', Date.now().toString())
+    headers.set('x-sw-ts', String(Date.now()))
 
     const toCache = new Response(blob, {
       status: response.status,

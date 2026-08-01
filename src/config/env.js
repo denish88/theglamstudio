@@ -18,6 +18,10 @@ module.exports = {
   CRYPTO_SECRET: process.env.CRYPTO_SECRET || 'theglamclub-shared-crypto-key-2026!',
   ENABLE_ENCRYPTION: process.env.ENABLE_ENCRYPTION === 'true',
 
+  VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || '',
+  VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || '',
+  VAPID_SUBJECT: process.env.VAPID_SUBJECT || 'mailto:admin@theglam.club',
+
   R2_ENDPOINT: process.env.R2_ENDPOINT,
   R2_ACCESS_KEY: process.env.R2_ACCESS_KEY,
   R2_SECRET_KEY: process.env.R2_SECRET_KEY,

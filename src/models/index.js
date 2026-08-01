@@ -10,6 +10,7 @@ const PaymentHistory = require('./paymentHistory.model')
 const Story = require('./story.model')
 const GiftBox = require('./giftBox.model')
 const MemberKeyCounter = require('./memberKeyCounter.model')
+const PushSubscription = require('./pushSubscription.model')
 
 module.exports = {
   User,
@@ -24,4 +25,5 @@ module.exports = {
   Story,
   GiftBox,
   MemberKeyCounter,
+  PushSubscription,
 }
