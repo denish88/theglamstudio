@@ -31,7 +31,7 @@ self.addEventListener('push', (event) => {
   let payload = {
     title: 'The Glam Club 💎',
     body: '🔥 New exclusive content has been uploaded!',
-    icon: '/logo.png',
+    icon: '/favicon.png',
     badge: '/favicon.png',
     data: { url: '/home' },
   }
@@ -51,7 +51,7 @@ self.addEventListener('push', (event) => {
   }
 
   const origin = self.location.origin
-  const icon = absoluteAsset(payload.icon, origin, '/logo.png')
+  const icon = absoluteAsset(payload.icon, origin, '/favicon.png')
   const badge = absoluteAsset(payload.badge, origin, '/favicon.png')
   const url = resolveClickUrl(payload?.data?.url, origin)
 

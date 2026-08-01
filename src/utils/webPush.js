@@ -128,7 +128,7 @@ function buildNewPostPayload(post) {
   return {
     title: 'The Glam Club 💎',
     body: '🔥 New exclusive content has been uploaded!',
-    icon: `${base}/logo.png`,
+    icon: `${base}/favicon.png`,
     badge: `${base}/favicon.png`,
     tag: postId ? `post-${postId}` : 'new-post',
     renotify: true,
