@@ -6,7 +6,7 @@ const cookieParser = require('cookie-parser')
 const path = require('path')
 const fs = require('fs')
 
-const { NODE_ENV } = require('./config/env')
+const { NODE_ENV, R2_ENDPOINT, R2_PUBLIC_URL } = require('./config/env')
 const corsOptions = require('./config/cors')
 const routes = require('./routes')
 const { errorHandler, cryptoMiddleware } = require('./middlewares')
@@ -14,6 +14,29 @@ const { errorHandler, cryptoMiddleware } = require('./middlewares')
 const app = express()
 
 app.set('trust proxy', 1)
+
+/** Hosts browsers may load video from after signed-URL redirect (CSP media-src). */
+function buildMediaSrcHosts() {
+  const hosts = new Set([
+    "'self'",
+    'blob:',
+    'https://*.r2.cloudflarestorage.com',
+  ])
+
+  for (const raw of [R2_ENDPOINT, R2_PUBLIC_URL]) {
+    if (!raw) continue
+    try {
+      const { protocol, host } = new URL(raw)
+      if (protocol === 'https:' || protocol === 'http:') {
+        hosts.add(`${protocol}//${host}`)
+      }
+    } catch {
+      // ignore invalid URL
+    }
+  }
+
+  return [...hosts]
+}
 
 app.use(
   helmet({
@@ -45,15 +68,14 @@ app.use(
           "https://*.r2.cloudflarestorage.com"
         ],
 
-        mediaSrc: [
-          "'self'",
-          "blob:",
-        ],
+        // Videos 302 to R2 signed URLs — must allow R2 here or players stay blank on live
+        mediaSrc: buildMediaSrcHosts(),
 
         connectSrc: [
           "'self'",
           "https://images.unsplash.com",
-          "https://plus.unsplash.com"
+          "https://plus.unsplash.com",
+          "https://*.r2.cloudflarestorage.com"
         ],
 
         fontSrc: [

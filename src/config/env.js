@@ -26,4 +26,6 @@ module.exports = {
   R2_ACCESS_KEY: process.env.R2_ACCESS_KEY,
   R2_SECRET_KEY: process.env.R2_SECRET_KEY,
   R2_BUCKET: process.env.R2_BUCKET,
+  /** Optional custom domain for R2 public/signed playback (e.g. https://media.yourdomain.com) */
+  R2_PUBLIC_URL: process.env.R2_PUBLIC_URL || '',
 }
