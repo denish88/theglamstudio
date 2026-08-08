@@ -43,4 +43,8 @@ const authenticateMedia = async (req, res, next) => {
 
 router.get('/{*splat}', authenticateMedia, antiHotlink, mediaController.streamMedia)
 
+// Videos: after auth + anti-hotlink, controller 302s to a short-lived R2 signed URL
+// (bytes served by R2). Use ?proxy=1 to force Node streaming (in-app downloads).
+// Photos: unchanged — always streamed through the proxy.
+
 module.exports = router

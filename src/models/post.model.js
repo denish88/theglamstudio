@@ -1,14 +1,23 @@
 const mongoose = require('mongoose')
 
+const VALID_CATEGORIES = [0, 1, 2, 3, 4, 5, 6, 7]
+const VIDEO_CATEGORIES = [6, 7]
+const IMAGE_CATEGORIES = [0, 1, 2, 3, 4, 5]
+
 const postSchema = new mongoose.Schema(
   {
+    mediaType: {
+      type: String,
+      enum: ['image', 'video'],
+      default: 'image',
+    },
     imageUrl: {
       type: [String],
-      required: [true, 'At least one image URL is required'],
-      validate: {
-        validator: (v) => v.length > 0,
-        message: 'imageUrl must contain at least one URL',
-      },
+      default: [],
+    },
+    videoUrl: {
+      type: String,
+      default: null,
     },
     isMultiImage: {
       type: Boolean,
@@ -35,7 +44,7 @@ const postSchema = new mongoose.Schema(
     },
     category: {
       type: Number,
-      enum: [0, 1, 2, 3, 4, 5],
+      enum: VALID_CATEGORIES,
       required: [true, 'Category is required'],
     },
     isActive: {
@@ -56,9 +65,22 @@ postSchema.index({ deletedAt: 1, isActive: 1, category: 1, _id: -1 })
 postSchema.index({ directory: 1, deletedAt: 1 })
 postSchema.index({ deletedAt: 1, createdAt: -1 })
 postSchema.index({ deletedAt: 1, isActive: 1, createdAt: -1 })
+postSchema.index({ deletedAt: 1, isActive: 1, mediaType: 1, category: 1 })
+
+postSchema.pre('validate', function () {
+  const mediaType = this.mediaType || 'image'
+  if (mediaType === 'video') {
+    if (!this.videoUrl) {
+      this.invalidate('videoUrl', 'Video URL is required for video posts')
+    }
+    if (!Array.isArray(this.imageUrl)) this.imageUrl = []
+  } else if (!this.imageUrl || this.imageUrl.length === 0) {
+    this.invalidate('imageUrl', 'At least one image URL is required')
+  }
+})
 
 postSchema.pre('save', function () {
-  this.isMultiImage = this.imageUrl.length > 1
+  this.isMultiImage = Array.isArray(this.imageUrl) && this.imageUrl.length > 1
 })
 
 postSchema.pre('findOneAndUpdate', function () {
@@ -69,5 +91,9 @@ postSchema.pre('findOneAndUpdate', function () {
 })
 
 const Post = mongoose.model('Post', postSchema)
+
+Post.VALID_CATEGORIES = VALID_CATEGORIES
+Post.VIDEO_CATEGORIES = VIDEO_CATEGORIES
+Post.IMAGE_CATEGORIES = IMAGE_CATEGORIES
 
 module.exports = Post

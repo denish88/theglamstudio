@@ -1,20 +1,32 @@
-const CACHE_NAME = 'glam-media-v2'
+const CACHE_NAME = 'glam-media-v4'
 const MEDIA_PATH = '/api/v1/media/'
 const MAX_AGE = 15 * 24 * 60 * 60 * 1000
 const MAX_ENTRIES = 500
+const VIDEO_EXT_RE = /\.(mp4|webm)(?:\?|$)/i
 
 self.addEventListener('install', () => self.skipWaiting())
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys.filter((k) => k.startsWith('glam-media-') && k !== CACHE_NAME).map((k) => caches.delete(k))
-        )
+    (async () => {
+      const keys = await caches.keys()
+      await Promise.all(
+        keys
+          .filter((k) => k.startsWith('glam-media-') && k !== CACHE_NAME)
+          .map((k) => caches.delete(k)),
       )
-      .then(() => self.clients.claim())
+
+      // Strip any video entries that may have been cached by older SW versions
+      const cache = await caches.open(CACHE_NAME)
+      const requests = await cache.keys()
+      await Promise.all(
+        requests
+          .filter((req) => VIDEO_EXT_RE.test(new URL(req.url).pathname))
+          .map((req) => cache.delete(req)),
+      )
+
+      await self.clients.claim()
+    })(),
   )
 })
 
@@ -23,6 +35,12 @@ self.addEventListener('fetch', (event) => {
 
   if (!url.pathname.startsWith(MEDIA_PATH)) return
   if (event.request.mode === 'navigate') return
+
+  // Never cache or intercept videos / Range requests.
+  // Browser talks to the API directly (auth cookie + anti-hotlink still apply).
+  if (VIDEO_EXT_RE.test(url.pathname) || event.request.headers.has('range')) {
+    return
+  }
 
   event.respondWith(serveMedia(event.request))
 })
@@ -175,6 +193,13 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 async function serveMedia(request) {
+  const url = new URL(request.url)
+
+  // Defense in depth: never cache Range responses or video files
+  if (VIDEO_EXT_RE.test(url.pathname) || request.headers.has('range')) {
+    return fetch(request, { credentials: 'same-origin' })
+  }
+
   const cache = await caches.open(CACHE_NAME)
   const cacheKey = stripRetryParam(request.url)
   const cached = await cache.match(cacheKey)
@@ -190,7 +215,7 @@ async function serveMedia(request) {
   try {
     const response = await fetch(request, { credentials: 'same-origin' })
 
-    if (!response.ok) {
+    if (!response.ok || response.status === 206) {
       return response
     }
 

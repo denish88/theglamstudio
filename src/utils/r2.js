@@ -3,7 +3,14 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner')
 const r2Client = require('../config/r2')
 const { R2_BUCKET } = require('../config/env')
 
+/** Long-lived signed URLs (admin / rare direct use) */
 const SIGNED_URL_EXPIRY = 6 * 60 * 60
+
+/**
+ * Playback signed URLs — long enough for a watch session, short enough that a
+ * copied R2 link dies quickly. Bytes go to R2; Node only mints the URL.
+ */
+const VIDEO_SIGNED_URL_EXPIRY = 90 * 60
 
 async function uploadToR2(buffer, key, contentType = 'image/webp') {
   const command = new PutObjectCommand({
@@ -61,10 +68,38 @@ function buildGiftBoxR2Key(filename) {
   return `giftboxes/${year}/${month}/${filename}`
 }
 
+function buildVideoR2Key(filename) {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  return `videos/${year}/${month}/${filename}`
+}
+
+function videoContentTypeForKey(key) {
+  const ext = String(key).substring(String(key).lastIndexOf('.')).toLowerCase()
+  if (ext === '.webm') return 'video/webm'
+  return 'video/mp4'
+}
+
 async function generateSignedImageUrl(key) {
   if (!key) return null
   const command = new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
   return getSignedUrl(r2Client, command, { expiresIn: SIGNED_URL_EXPIRY })
+}
+
+/**
+ * Short-lived GET URL for direct browser ↔ R2 video playback (Range/seek supported).
+ */
+async function generateSignedVideoUrl(key, expiresIn = VIDEO_SIGNED_URL_EXPIRY) {
+  if (!key) return null
+  const command = new GetObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: key,
+    ResponseContentType: videoContentTypeForKey(key),
+    ResponseContentDisposition: 'inline',
+    ResponseCacheControl: 'private, no-store',
+  })
+  return getSignedUrl(r2Client, command, { expiresIn })
 }
 
 async function generateSignedUrls(keys) {
@@ -80,6 +115,10 @@ module.exports = {
   buildR2Key,
   buildStoryR2Key,
   buildGiftBoxR2Key,
+  buildVideoR2Key,
   generateSignedImageUrl,
+  generateSignedVideoUrl,
   generateSignedUrls,
+  VIDEO_SIGNED_URL_EXPIRY,
+  SIGNED_URL_EXPIRY,
 }

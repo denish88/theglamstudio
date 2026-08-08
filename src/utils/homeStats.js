@@ -44,8 +44,23 @@ async function fetchHomeStats() {
           totalPhotos: {
             $sum: {
               $cond: [
-                { $isArray: '$imageUrl' },
+                {
+                  $and: [
+                    { $ne: [{ $ifNull: ['$mediaType', 'image'] }, 'video'] },
+                    { $isArray: '$imageUrl' },
+                  ],
+                },
                 { $size: '$imageUrl' },
+                0,
+              ],
+            },
+          },
+          // Only real video posts — do not use $ne:null on videoUrl (matches almost everything)
+          totalVideos: {
+            $sum: {
+              $cond: [
+                { $eq: [{ $ifNull: ['$mediaType', 'image'] }, 'video'] },
+                1,
                 0,
               ],
             },
@@ -56,11 +71,12 @@ async function fetchHomeStats() {
     fetchActiveAnnouncement(),
   ])
 
-  const totals = postAgg[0] || { totalPosts: 0, totalPhotos: 0 }
+  const totals = postAgg[0] || { totalPosts: 0, totalPhotos: 0, totalVideos: 0 }
 
   return {
     totalPosts: totals.totalPosts || 0,
     totalPhotos: totals.totalPhotos || 0,
+    totalVideos: totals.totalVideos || 0,
     announcement,
   }
 }

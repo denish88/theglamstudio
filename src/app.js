@@ -45,6 +45,11 @@ app.use(
           "https://*.r2.cloudflarestorage.com"
         ],
 
+        mediaSrc: [
+          "'self'",
+          "blob:",
+        ],
+
         connectSrc: [
           "'self'",
           "https://images.unsplash.com",

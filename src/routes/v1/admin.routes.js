@@ -11,7 +11,7 @@ const {
   storyController,
   giftBoxController,
 } = require('../../controllers')
-const { authenticate, adminOnly, upload, uploadTimeout } = require('../../middlewares')
+const { authenticate, adminOnly, upload, uploadPostMedia, uploadTimeout } = require('../../middlewares')
 
 router.use(authenticate, adminOnly)
 
@@ -39,11 +39,27 @@ router.put('/directories/:id', directoryController.updateDirectory)
 router.delete('/directories/:id', directoryController.deleteDirectory)
 
 // ── Post management ──
-router.post('/posts', uploadTimeout, upload.array('images', 20), postController.createPost)
+router.post(
+  '/posts',
+  uploadTimeout,
+  uploadPostMedia.fields([
+    { name: 'images', maxCount: 20 },
+    { name: 'video', maxCount: 1 },
+  ]),
+  postController.createPost,
+)
 router.get('/posts', postController.listPosts)
 router.patch('/posts/:id/category', postController.updatePostCategory)
 router.get('/posts/:id', postController.getPost)
-router.put('/posts/:id', uploadTimeout, upload.array('images', 20), postController.updatePost)
+router.put(
+  '/posts/:id',
+  uploadTimeout,
+  uploadPostMedia.fields([
+    { name: 'images', maxCount: 20 },
+    { name: 'video', maxCount: 1 },
+  ]),
+  postController.updatePost,
+)
 router.delete('/posts/:id', postController.deletePost)
 
 // ── Story (single active story) ──

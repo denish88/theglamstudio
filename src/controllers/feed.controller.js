@@ -1,6 +1,6 @@
 const mongoose = require('mongoose')
 const { Post, Like, Directory } = require('../models')
-const { ApiError, ApiResponse, buildMediaUrls, getISTDayBounds } = require('../utils')
+const { ApiError, ApiResponse, buildMediaUrl, buildMediaUrls, getISTDayBounds } = require('../utils')
 const { getHomeStats } = require('../utils/homeStats')
 const { getActiveStoryForFeed } = require('./story.controller')
 const { getActiveGiftBoxForFeed } = require('./giftBox.controller')
@@ -20,7 +20,7 @@ const getHomeFeed = async (req, res, next) => {
     const [stats, posts, story, giftBox] = await Promise.all([
       getHomeStats(),
       Post.find(postFilter)
-        .select('_id imageUrl category createdAt')
+        .select('_id imageUrl videoUrl mediaType category createdAt')
         .sort({ _id: -1 })
         .limit(fetchLimit)
         .lean(),
@@ -34,19 +34,23 @@ const getHomeFeed = async (req, res, next) => {
     const latestPosts = previewPosts.map((post) => {
       const imageCount = post.imageUrl?.length || 0
       const firstKey = imageCount > 0 ? post.imageUrl[0] : null
+      const mediaType = post.mediaType || (post.videoUrl ? 'video' : 'image')
 
       return {
         _id: post._id,
         category: post.category,
         createdAt: post.createdAt,
+        mediaType,
         imageUrl: firstKey ? buildMediaUrls([firstKey]) : [],
-        imageCount,
+        videoUrl: post.videoUrl ? buildMediaUrl(post.videoUrl) : null,
+        imageCount: mediaType === 'video' ? 0 : imageCount,
       }
     })
 
     ApiResponse.success(res, {
       totalPosts: stats.totalPosts,
       totalPhotos: stats.totalPhotos,
+      totalVideos: stats.totalVideos,
       announcement: stats.announcement,
       story,
       giftBox,
@@ -68,8 +72,8 @@ const getPosts = async (req, res, next) => {
 
     if (req.query.category !== undefined) {
       const cat = Number(req.query.category)
-      if (![0, 1, 2, 3, 4, 5].includes(cat)) {
-        throw ApiError.badRequest('Category must be 0, 1, 2, 3, 4 or 5')
+      if (![0, 1, 2, 3, 4, 5, 6, 7].includes(cat)) {
+        throw ApiError.badRequest('Category must be 0–7')
       }
       filter.category = cat
     }
@@ -108,7 +112,9 @@ const getPosts = async (req, res, next) => {
 
     const postsWithProxyUrls = posts.map((p) => ({
       ...p,
+      mediaType: p.mediaType || (p.videoUrl ? 'video' : 'image'),
       imageUrl: buildMediaUrls(p.imageUrl),
+      videoUrl: p.videoUrl ? buildMediaUrl(p.videoUrl) : null,
       isLiked: likedSet.has(p._id.toString()),
     }))
 
@@ -145,7 +151,9 @@ const getPostById = async (req, res, next) => {
 
     const liked = await Like.exists({ user: userId, post: post._id })
     post.isLiked = !!liked
+    post.mediaType = post.mediaType || (post.videoUrl ? 'video' : 'image')
     post.imageUrl = buildMediaUrls(post.imageUrl)
+    post.videoUrl = post.videoUrl ? buildMediaUrl(post.videoUrl) : null
 
     ApiResponse.success(res, post)
   } catch (error) {
@@ -159,8 +167,8 @@ const getDirectories = async (req, res, next) => {
 
     if (req.query.category !== undefined) {
       const cat = Number(req.query.category)
-      if (![0, 1, 2, 3, 4, 5].includes(cat)) {
-        throw ApiError.badRequest('Category must be 0, 1, 2, 3, 4 or 5')
+      if (![0, 1, 2, 3, 4, 5, 6, 7].includes(cat)) {
+        throw ApiError.badRequest('Category must be 0–7')
       }
       match.category = cat
     }
@@ -201,6 +209,7 @@ const getPostStats = async (req, res, next) => {
     ApiResponse.success(res, {
       totalPosts: stats.totalPosts,
       totalPhotos: stats.totalPhotos,
+      totalVideos: stats.totalVideos,
     })
   } catch (error) {
     next(error)
