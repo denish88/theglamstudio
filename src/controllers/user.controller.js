@@ -5,6 +5,7 @@ const {
   ApiError,
   ApiResponse,
   generatePasswordResetToken,
+  getISTDayBounds,
 } = require('../utils')
 const {
   generateNextMemberKeyId,
@@ -204,12 +205,15 @@ const getReferralStats = async (req, res, next) => {
 const checkExpiredSubscriptions = async (req, res, next) => {
   try {
     const now = new Date()
+    // Date-only expiry (IST): if endDate falls on today or earlier, deactivate —
+    // ignore the time portion of endDate / current time.
+    const { end: endOfTodayIst } = getISTDayBounds(now)
 
     const filter = {
       deletedAt: null,
       role: { $ne: 'admin' },
       isActive: true,
-      'subscription.endDate': { $ne: null, $lt: now },
+      'subscription.endDate': { $ne: null, $lte: endOfTodayIst },
     }
 
     const expiredUsers = await User.find(filter)
