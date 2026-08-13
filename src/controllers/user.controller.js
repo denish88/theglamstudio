@@ -133,10 +133,24 @@ const listUsers = async (req, res, next) => {
       filter.collector = req.query.collector
     }
 
-    const [users, total] = await Promise.all([
+    const [users, total, statsAgg] = await Promise.all([
       User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       User.countDocuments(filter),
+      User.aggregate([
+        { $match: { deletedAt: null } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            active: { $sum: { $cond: [{ $eq: ['$isActive', true] }, 1, 0] } },
+            inactive: { $sum: { $cond: [{ $eq: ['$isActive', true] }, 0, 1] } },
+            admins: { $sum: { $cond: [{ $eq: ['$role', 'admin'] }, 1, 0] } },
+          },
+        },
+      ]),
     ])
+
+    const totals = statsAgg[0] || { total: 0, active: 0, inactive: 0, admins: 0 }
 
     ApiResponse.success(res, {
       users,
@@ -145,6 +159,12 @@ const listUsers = async (req, res, next) => {
         limit,
         total,
         totalPages: Math.ceil(total / limit),
+      },
+      stats: {
+        total: totals.total || 0,
+        active: totals.active || 0,
+        inactive: totals.inactive || 0,
+        admins: totals.admins || 0,
       },
     })
   } catch (error) {

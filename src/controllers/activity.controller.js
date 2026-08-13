@@ -184,6 +184,7 @@ const getSuspiciousUsers = async (req, res, next) => {
     const users = await User.find({
       role: 'user',
       deletedAt: null,
+      isActive: true,
       'loginActivity.0': { $exists: true },
     })
       .select('keyId collector isActive createdAt subscription loginActivity')
