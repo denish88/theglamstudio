@@ -7,6 +7,7 @@ const {
   announcementController,
   storyController,
   giftBoxController,
+  downloadController,
 } = require('../../controllers')
 const { authenticate } = require('../../middlewares')
 
@@ -18,6 +19,8 @@ router.get('/posts/stats', feedController.getPostStats)
 router.get('/posts', feedController.getPosts)
 router.get('/posts/:id', feedController.getPostById)
 router.post('/posts/:id/like', feedController.toggleLike)
+router.post('/posts/:id/download', downloadController.downloadPostPhoto)
+router.get('/downloads/quota', downloadController.getDownloadQuota)
 
 router.post('/referral/apply', referralController.applyReferralCode)
 router.get('/referral/my', referralController.getMyReferrals)

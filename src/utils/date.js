@@ -1,4 +1,4 @@
-function getISTDayBounds(date = new Date()) {
+function getISTDateParts(date = new Date()) {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Kolkata',
     year: 'numeric',
@@ -11,10 +11,21 @@ function getISTDayBounds(date = new Date()) {
   const m = parts.find((p) => p.type === 'month').value
   const d = parts.find((p) => p.type === 'day').value
 
+  return { y, m, d, dateKey: `${y}-${m}-${d}` }
+}
+
+function getISTDayBounds(date = new Date()) {
+  const { y, m, d } = getISTDateParts(date)
+
   return {
     start: new Date(`${y}-${m}-${d}T00:00:00+05:30`),
     end: new Date(`${y}-${m}-${d}T23:59:59.999+05:30`),
   }
+}
+
+/** Calendar date string for Asia/Kolkata, e.g. "2026-09-13" */
+function getISTDateKey(date = new Date()) {
+  return getISTDateParts(date).dateKey
 }
 
 function getISTMonthBounds(date = new Date()) {
@@ -42,4 +53,4 @@ function getISTMonthBounds(date = new Date()) {
   }
 }
 
-module.exports = { getISTDayBounds, getISTMonthBounds }
+module.exports = { getISTDayBounds, getISTMonthBounds, getISTDateKey }

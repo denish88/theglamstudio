@@ -49,7 +49,7 @@ const listCollectors = async (req, res, next) => {
 
 const createUser = async (req, res, next) => {
   try {
-    const { subscriptionType, referredByKeyId, collector } = req.body
+    const { subscriptionType, referredByKeyId, collector, downloadEnabled } = req.body
 
     const collectorName = await validateCollectorName(collector)
     const createdByAdmin = getAdminDisplayName(req.user)
@@ -69,6 +69,7 @@ const createUser = async (req, res, next) => {
       password: plainPassword,
       role: 'user',
       isActive: true,
+      downloadEnabled: downloadEnabled === true || downloadEnabled === 'true',
       createdByAdmin,
       collector: collectorName,
       subscription: {
@@ -109,6 +110,7 @@ const createUser = async (req, res, next) => {
       subscription: user.subscription,
       createdByAdmin: user.createdByAdmin,
       collector: user.collector,
+      downloadEnabled: !!user.downloadEnabled,
     }, 'User created successfully')
   } catch (error) {
     next(error)
@@ -281,6 +283,30 @@ const toggleUserActive = async (req, res, next) => {
     await user.save({ validateBeforeSave: false })
 
     ApiResponse.success(res, { isActive: user.isActive }, `User ${user.isActive ? 'activated' : 'deactivated'}`)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const toggleUserDownload = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ _id: req.params.id, deletedAt: null })
+    if (!user) {
+      throw ApiError.notFound('User not found')
+    }
+
+    if (user.role === 'admin') {
+      throw ApiError.badRequest('Download permission does not apply to admin accounts')
+    }
+
+    user.downloadEnabled = !user.downloadEnabled
+    await user.save({ validateBeforeSave: false })
+
+    ApiResponse.success(
+      res,
+      { downloadEnabled: !!user.downloadEnabled },
+      user.downloadEnabled ? 'Photo download enabled' : 'Photo download disabled',
+    )
   } catch (error) {
     next(error)
   }
@@ -475,6 +501,7 @@ module.exports = {
   getReferralStats,
   checkExpiredSubscriptions,
   toggleUserActive,
+  toggleUserDownload,
   deleteUser,
   updateUserPoints,
   createPasswordResetLink,

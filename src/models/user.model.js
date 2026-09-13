@@ -112,6 +112,15 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    /** Special members may download up to 2 photos per IST day until subscription ends */
+    downloadEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    downloadQuota: {
+      date: { type: String, default: null }, // YYYY-MM-DD in Asia/Kolkata
+      count: { type: Number, default: 0, min: 0 },
+    },
     ageConsentConfirmed: {
       type: Boolean,
       default: false,
@@ -208,6 +217,7 @@ userSchema.methods.toSafeObject = function () {
     points: this.points || 0,
     isReferralApplied: !!this.referredBy,
     isActive: this.isActive,
+    downloadEnabled: !!this.downloadEnabled,
     ageConsentConfirmed: !!this.ageConsentConfirmed,
     ageConsentConfirmedAt: this.ageConsentConfirmedAt || null,
     screenLock: {
