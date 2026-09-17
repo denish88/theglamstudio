@@ -20,7 +20,7 @@ const WATERMARK_TEXT = '@theglamclub1'
  * Note: SVG group opacity alone is unreliable with Sharp/librsvg; we do not rely on it.
  * Below ~0.06 is usually invisible to the eye after WebP. 0.10–0.14 is subtle but readable.
  */
-const WATERMARK_OPACITY = 0.12
+const WATERMARK_OPACITY = 0.10
 /**
  * Font size as a fraction of min(width, height).
  * Final px = clamp(minSide * WATERMARK_FONT_SIZE, 18, 72)
