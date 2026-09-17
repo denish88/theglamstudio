@@ -13,26 +13,30 @@ const SMALL_FILE_THRESHOLD = 1024 * 1024 // 1 MB
 const SMALL_FILE_QUALITY = 100
 
 // ── Watermark settings (easy to tune) ──────────────────────────────────────
-// Text burned into full-size images before WebP encode.
+// Burned into full-size images after resize and before WebP encode.
 const WATERMARK_TEXT = '@theglamclub1'
-/** Overall opacity of text + side lines (0–1). 2% = very subtle. */
-const WATERMARK_OPACITY = 0.02
+/**
+ * Final overlay strength (0–1), applied to the PNG alpha channel in pixel space.
+ * Note: SVG group opacity alone is unreliable with Sharp/librsvg; we do not rely on it.
+ * Below ~0.06 is usually invisible to the eye after WebP. 0.10–0.14 is subtle but readable.
+ */
+const WATERMARK_OPACITY = 0.12
 /**
  * Font size as a fraction of min(width, height).
- * Final px = clamp(minSide * WATERMARK_FONT_SIZE, 12, 56)
+ * Final px = clamp(minSide * WATERMARK_FONT_SIZE, 18, 72)
  */
-const WATERMARK_FONT_SIZE = 0.028
-/** Vertical position of first diagonal mark (0–1 of image height). */
-const WATERMARK_ROW_1_POSITION = 0.25
-/** Vertical position of second diagonal mark (0–1 of image height). */
-const WATERMARK_ROW_2_POSITION = 0.75
+const WATERMARK_FONT_SIZE = 0.036
+/** Vertical anchor of first diagonal mark (0–1 of image height). */
+const WATERMARK_ROW_1_POSITION = 0.28
+/** Vertical anchor of second diagonal mark (0–1 of image height). */
+const WATERMARK_ROW_2_POSITION = 0.72
 /**
  * Line stroke as a fraction of image width.
- * Final px = max(1, width * WATERMARK_LINE_WIDTH)
+ * Final px = max(1.5, width * WATERMARK_LINE_WIDTH)
  */
-const WATERMARK_LINE_WIDTH = 0.00115
-/** Diagonal tilt in degrees (negative = bottom-left → top-right). */
-const WATERMARK_ANGLE = -30
+const WATERMARK_LINE_WIDTH = 0.0014
+/** Diagonal tilt in degrees (negative = rising left → right). */
+const WATERMARK_ANGLE = -32
 
 function escapeXml(value) {
   return String(value)
@@ -43,71 +47,98 @@ function escapeXml(value) {
     .replace(/'/g, '&apos;')
 }
 
+/**
+ * Build a full-size SVG overlay (opaque drawing). Opacity is applied later via alpha.
+ * Uses white fill + soft dark stroke so the mark stays readable on light and dark photos.
+ */
 function buildWatermarkSvg(width, height) {
   const minSide = Math.min(width, height)
   const fontSize = Math.round(
-    Math.min(56, Math.max(12, minSide * WATERMARK_FONT_SIZE)),
+    Math.min(72, Math.max(18, minSide * WATERMARK_FONT_SIZE)),
   )
-  const strokeWidth = Math.max(1, Math.round(width * WATERMARK_LINE_WIDTH * 10) / 10)
+  const strokeWidth = Math.max(1.5, width * WATERMARK_LINE_WIDTH)
+  const textStroke = Math.max(1, fontSize * 0.045)
   const text = escapeXml(WATERMARK_TEXT)
-  // Approximate rendered text width for centering the side rules.
-  const textWidth = WATERMARK_TEXT.length * fontSize * 0.56
-  const gap = fontSize * 0.7
-  // Longer arms so the mark still spans nicely after rotation.
-  const armLength = Math.max(width * 0.28, textWidth * 0.9)
+  // Approximate glyph width for line placement around the label.
+  const textWidth = WATERMARK_TEXT.length * fontSize * 0.58
+  const gap = fontSize * 0.75
+  const armLength = Math.max(width * 0.22, textWidth * 0.85)
   const centerX = width / 2
-  const leftLineEnd = centerX - textWidth / 2 - gap
-  const rightLineStart = centerX + textWidth / 2 + gap
-  const leftLineStart = leftLineEnd - armLength
-  const rightLineEnd = rightLineStart + armLength
 
   const rows = [WATERMARK_ROW_1_POSITION, WATERMARK_ROW_2_POSITION]
     .map((ratio) => {
       const y = Math.round(height * ratio)
+      const leftLineEnd = centerX - textWidth / 2 - gap
+      const rightLineStart = centerX + textWidth / 2 + gap
+      const leftLineStart = leftLineEnd - armLength
+      const rightLineEnd = rightLineStart + armLength
+
       return `
       <g transform="rotate(${WATERMARK_ANGLE} ${centerX} ${y})">
         <line
-          x1="${leftLineStart}"
-          y1="${y}"
-          x2="${leftLineEnd}"
-          y2="${y}"
-          stroke="#ffffff"
-          stroke-width="${strokeWidth}"
+          x1="${leftLineStart}" y1="${y}"
+          x2="${leftLineEnd}" y2="${y}"
+          stroke="#000000" stroke-opacity="0.55" stroke-width="${strokeWidth + 1.2}"
           stroke-linecap="round"
         />
-        <text
-          x="${centerX}"
-          y="${y}"
-          fill="#ffffff"
-          font-family="Arial, Helvetica, sans-serif"
-          font-size="${fontSize}"
-          font-weight="600"
-          text-anchor="middle"
-          dominant-baseline="middle"
-          letter-spacing="0.04em"
-        >${text}</text>
         <line
-          x1="${rightLineStart}"
-          y1="${y}"
-          x2="${rightLineEnd}"
-          y2="${y}"
-          stroke="#ffffff"
-          stroke-width="${strokeWidth}"
+          x1="${leftLineStart}" y1="${y}"
+          x2="${leftLineEnd}" y2="${y}"
+          stroke="#ffffff" stroke-width="${strokeWidth}"
           stroke-linecap="round"
         />
+        <line
+          x1="${rightLineStart}" y1="${y}"
+          x2="${rightLineEnd}" y2="${y}"
+          stroke="#000000" stroke-opacity="0.55" stroke-width="${strokeWidth + 1.2}"
+          stroke-linecap="round"
+        />
+        <line
+          x1="${rightLineStart}" y1="${y}"
+          x2="${rightLineEnd}" y2="${y}"
+          stroke="#ffffff" stroke-width="${strokeWidth}"
+          stroke-linecap="round"
+        />
+        <!-- dy centers text reliably in librsvg (dominant-baseline is flaky) -->
+        <text
+          x="${centerX}" y="${y}"
+          fill="#000000" fill-opacity="0.5"
+          stroke="#000000" stroke-opacity="0.35"
+          stroke-width="${textStroke * 1.4}"
+          font-family="DejaVu Sans, Arial, Helvetica, sans-serif"
+          font-size="${fontSize}" font-weight="700"
+          text-anchor="middle" dy="0.35em"
+        >${text}</text>
+        <text
+          x="${centerX}" y="${y}"
+          fill="#ffffff"
+          font-family="DejaVu Sans, Arial, Helvetica, sans-serif"
+          font-size="${fontSize}" font-weight="700"
+          text-anchor="middle" dy="0.35em"
+        >${text}</text>
       </g>`
     })
     .join('')
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <g opacity="${WATERMARK_OPACITY}">${rows}
-  </g>
+  ${rows}
 </svg>`
 }
 
 /**
- * Overlay two subtle diagonal brand watermarks on an image buffer.
- * Returns a raster buffer (same pixel size). WebP conversion should happen after.
+ * Scale the alpha channel of an RGBA buffer in-place (opacity 0–1).
+ */
+function applyAlphaOpacity(rgba, opacity) {
+  const o = Math.min(1, Math.max(0, opacity))
+  for (let i = 3; i < rgba.length; i += 4) {
+    rgba[i] = Math.round(rgba[i] * o)
+  }
+  return rgba
+}
+
+/**
+ * Overlay two subtle diagonal brand watermarks.
+ * Returns a raster buffer at the same pixel size (PNG). WebP encode happens after.
  *
  * @param {Buffer} inputBuffer
  * @returns {Promise<Buffer>}
@@ -122,16 +153,34 @@ async function addWatermark(inputBuffer) {
     return inputBuffer
   }
 
+  // 1) Rasterize SVG at full strength into RGBA (librsvg handles fonts/rotation here).
   const svg = Buffer.from(buildWatermarkSvg(width, height))
+  const overlay = await sharp(svg, { density: 72 })
+    .resize(width, height, { fit: 'fill' })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
 
-  return image
+  // 2) Apply opacity in pixel space so WebP/composite always see real transparency.
+  applyAlphaOpacity(overlay.data, WATERMARK_OPACITY)
+
+  // 3) Composite over the photo.
+  return sharp(inputBuffer, { failOn: 'none' })
+    .ensureAlpha()
     .composite([
       {
-        input: svg,
+        input: overlay.data,
+        raw: {
+          width: overlay.info.width,
+          height: overlay.info.height,
+          channels: 4,
+        },
         top: 0,
         left: 0,
+        blend: 'over',
       },
     ])
+    .png({ compressionLevel: 1 })
     .toBuffer()
 }
 
@@ -140,7 +189,9 @@ async function addWatermark(inputBuffer) {
  * @param {{ watermark?: boolean }} [options] - watermark defaults to true
  */
 async function optimizeImage(buffer, options = {}) {
-  const applyWatermark = options.watermark !== false
+  // Allow legacy call style: optimizeImage(buf, mimetypeString)
+  const opts = typeof options === 'string' ? {} : options || {}
+  const applyWatermark = opts.watermark !== false
 
   const metadata = await sharp(buffer).metadata()
   const width = metadata.width || 0
@@ -164,9 +215,8 @@ async function optimizeImage(buffer, options = {}) {
     })
   }
 
-  // Finalize rotate/resize first so watermark SVG matches the final pixel size.
-  // Resolution / quality settings above are unchanged; WebP runs last.
-  let processed = await pipeline.toBuffer()
+  // Lossless intermediate so the watermark is not crushed by a JPEG pass.
+  let processed = await pipeline.png({ compressionLevel: 1 }).toBuffer()
 
   if (applyWatermark) {
     processed = await addWatermark(processed)
@@ -241,7 +291,6 @@ module.exports = {
   createStoryImages,
   createGiftBoxThumbnail,
   createGiftBoxImages,
-  // Tunable watermark constants (for tests / future config)
   WATERMARK_TEXT,
   WATERMARK_OPACITY,
   WATERMARK_FONT_SIZE,
