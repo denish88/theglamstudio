@@ -15,22 +15,24 @@ const SMALL_FILE_QUALITY = 100
 // ── Watermark settings (easy to tune) ──────────────────────────────────────
 // Text burned into full-size images before WebP encode.
 const WATERMARK_TEXT = '@theglamclub1'
-/** Overall opacity of text + side lines (0–1). Target ~15–18%. */
-const WATERMARK_OPACITY = 0.16
+/** Overall opacity of text + side lines (0–1). 2% = very subtle. */
+const WATERMARK_OPACITY = 0.02
 /**
  * Font size as a fraction of min(width, height).
  * Final px = clamp(minSide * WATERMARK_FONT_SIZE, 12, 56)
  */
 const WATERMARK_FONT_SIZE = 0.028
-/** Vertical position of first row (0–1 of image height). */
+/** Vertical position of first diagonal mark (0–1 of image height). */
 const WATERMARK_ROW_1_POSITION = 0.25
-/** Vertical position of second row (0–1 of image height). */
+/** Vertical position of second diagonal mark (0–1 of image height). */
 const WATERMARK_ROW_2_POSITION = 0.75
 /**
- * Horizontal line stroke as a fraction of image width.
+ * Line stroke as a fraction of image width.
  * Final px = max(1, width * WATERMARK_LINE_WIDTH)
  */
 const WATERMARK_LINE_WIDTH = 0.00115
+/** Diagonal tilt in degrees (negative = bottom-left → top-right). */
+const WATERMARK_ANGLE = -30
 
 function escapeXml(value) {
   return String(value)
@@ -51,18 +53,21 @@ function buildWatermarkSvg(width, height) {
   // Approximate rendered text width for centering the side rules.
   const textWidth = WATERMARK_TEXT.length * fontSize * 0.56
   const gap = fontSize * 0.7
-  const sideMargin = Math.max(width * 0.06, fontSize * 1.5)
+  // Longer arms so the mark still spans nicely after rotation.
+  const armLength = Math.max(width * 0.28, textWidth * 0.9)
   const centerX = width / 2
-  const leftLineEnd = Math.max(sideMargin, centerX - textWidth / 2 - gap)
-  const rightLineStart = Math.min(width - sideMargin, centerX + textWidth / 2 + gap)
+  const leftLineEnd = centerX - textWidth / 2 - gap
+  const rightLineStart = centerX + textWidth / 2 + gap
+  const leftLineStart = leftLineEnd - armLength
+  const rightLineEnd = rightLineStart + armLength
 
   const rows = [WATERMARK_ROW_1_POSITION, WATERMARK_ROW_2_POSITION]
     .map((ratio) => {
       const y = Math.round(height * ratio)
       return `
-      <g>
+      <g transform="rotate(${WATERMARK_ANGLE} ${centerX} ${y})">
         <line
-          x1="${sideMargin}"
+          x1="${leftLineStart}"
           y1="${y}"
           x2="${leftLineEnd}"
           y2="${y}"
@@ -84,7 +89,7 @@ function buildWatermarkSvg(width, height) {
         <line
           x1="${rightLineStart}"
           y1="${y}"
-          x2="${width - sideMargin}"
+          x2="${rightLineEnd}"
           y2="${y}"
           stroke="#ffffff"
           stroke-width="${strokeWidth}"
@@ -101,9 +106,8 @@ function buildWatermarkSvg(width, height) {
 }
 
 /**
- * Overlay two subtle horizontal brand watermarks on an image buffer.
- * Does not rotate the mark. Returns a raster buffer (same pixel size).
- * WebP conversion should happen after this step.
+ * Overlay two subtle diagonal brand watermarks on an image buffer.
+ * Returns a raster buffer (same pixel size). WebP conversion should happen after.
  *
  * @param {Buffer} inputBuffer
  * @returns {Promise<Buffer>}
@@ -244,4 +248,5 @@ module.exports = {
   WATERMARK_ROW_1_POSITION,
   WATERMARK_ROW_2_POSITION,
   WATERMARK_LINE_WIDTH,
+  WATERMARK_ANGLE,
 }
