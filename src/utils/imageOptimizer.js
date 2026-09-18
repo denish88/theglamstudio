@@ -23,20 +23,24 @@ const WATERMARK_TEXT = '@theglamclub1'
 const WATERMARK_OPACITY = 0.10
 /**
  * Font size as a fraction of min(width, height).
- * Final px = clamp(minSide * WATERMARK_FONT_SIZE, 18, 72)
+ * Final px = clamp(minSide * WATERMARK_FONT_SIZE, 16, 64)
  */
-const WATERMARK_FONT_SIZE = 0.036
-/** Vertical anchor of first diagonal mark (0–1 of image height). */
-const WATERMARK_ROW_1_POSITION = 0.28
-/** Vertical anchor of second diagonal mark (0–1 of image height). */
-const WATERMARK_ROW_2_POSITION = 0.72
-/**
- * Line stroke as a fraction of image width.
- * Final px = max(1.5, width * WATERMARK_LINE_WIDTH)
- */
-const WATERMARK_LINE_WIDTH = 0.0014
+const WATERMARK_FONT_SIZE = 0.032
 /** Diagonal tilt in degrees (negative = rising left → right). */
 const WATERMARK_ANGLE = -32
+/**
+ * How many parallel diagonal rows of repeated text.
+ * Keep at 1 for a single centered diagonal band.
+ */
+const WATERMARK_ROW_COUNT = 1
+/**
+ * Vertical gap between parallel rows, as a fraction of min(width, height).
+ */
+const WATERMARK_ROW_SPACING = 0.14
+/**
+ * Extra horizontal gap between repeated names, as a fraction of font size.
+ */
+const WATERMARK_REPEAT_GAP = 1.35
 
 function escapeXml(value) {
   return String(value)
@@ -48,80 +52,67 @@ function escapeXml(value) {
 }
 
 /**
- * Build a full-size SVG overlay (opaque drawing). Opacity is applied later via alpha.
- * Uses white fill + soft dark stroke so the mark stays readable on light and dark photos.
+ * Build a centered diagonal repeating-name overlay (opaque drawing).
+ * Opacity is applied later via the alpha channel.
+ * White fill + soft dark edge so it stays readable on light and dark photos.
  */
 function buildWatermarkSvg(width, height) {
   const minSide = Math.min(width, height)
   const fontSize = Math.round(
-    Math.min(72, Math.max(18, minSide * WATERMARK_FONT_SIZE)),
+    Math.min(64, Math.max(16, minSide * WATERMARK_FONT_SIZE)),
   )
-  const strokeWidth = Math.max(1.5, width * WATERMARK_LINE_WIDTH)
-  const textStroke = Math.max(1, fontSize * 0.045)
+  const textStroke = Math.max(1, fontSize * 0.04)
   const text = escapeXml(WATERMARK_TEXT)
-  // Approximate glyph width for line placement around the label.
-  const textWidth = WATERMARK_TEXT.length * fontSize * 0.58
-  const gap = fontSize * 0.75
-  const armLength = Math.max(width * 0.22, textWidth * 0.85)
-  const centerX = width / 2
+  const fontFamily = 'DejaVu Sans, Arial, Helvetica, sans-serif'
 
-  const rows = [WATERMARK_ROW_1_POSITION, WATERMARK_ROW_2_POSITION]
-    .map((ratio) => {
-      const y = Math.round(height * ratio)
-      const leftLineEnd = centerX - textWidth / 2 - gap
-      const rightLineStart = centerX + textWidth / 2 + gap
-      const leftLineStart = leftLineEnd - armLength
-      const rightLineEnd = rightLineStart + armLength
+  // Approximate advance width of one label + spacing between repeats.
+  const labelWidth = WATERMARK_TEXT.length * fontSize * 0.58
+  const step = labelWidth + fontSize * WATERMARK_REPEAT_GAP
 
-      return `
-      <g transform="rotate(${WATERMARK_ANGLE} ${centerX} ${y})">
-        <line
-          x1="${leftLineStart}" y1="${y}"
-          x2="${leftLineEnd}" y2="${y}"
-          stroke="#000000" stroke-opacity="0.55" stroke-width="${strokeWidth + 1.2}"
-          stroke-linecap="round"
-        />
-        <line
-          x1="${leftLineStart}" y1="${y}"
-          x2="${leftLineEnd}" y2="${y}"
-          stroke="#ffffff" stroke-width="${strokeWidth}"
-          stroke-linecap="round"
-        />
-        <line
-          x1="${rightLineStart}" y1="${y}"
-          x2="${rightLineEnd}" y2="${y}"
-          stroke="#000000" stroke-opacity="0.55" stroke-width="${strokeWidth + 1.2}"
-          stroke-linecap="round"
-        />
-        <line
-          x1="${rightLineStart}" y1="${y}"
-          x2="${rightLineEnd}" y2="${y}"
-          stroke="#ffffff" stroke-width="${strokeWidth}"
-          stroke-linecap="round"
-        />
-        <!-- dy centers text reliably in librsvg (dominant-baseline is flaky) -->
+  // Cover the full diagonal so rotated rows still fill the frame.
+  const cover = Math.sqrt(width * width + height * height) * 1.25
+  const repeatCount = Math.max(3, Math.ceil(cover / step) + 1)
+  const startX = -((repeatCount - 1) * step) / 2
+
+  const rowCount = Math.max(1, Math.round(WATERMARK_ROW_COUNT))
+  const rowGap = Math.max(fontSize * 2.2, minSide * WATERMARK_ROW_SPACING)
+  const firstRowY = -((rowCount - 1) * rowGap) / 2
+
+  const cx = width / 2
+  const cy = height / 2
+
+  const rows = []
+  for (let r = 0; r < rowCount; r += 1) {
+    const y = firstRowY + r * rowGap
+    const labels = []
+    for (let i = 0; i < repeatCount; i += 1) {
+      const x = startX + i * step
+      labels.push(`
         <text
-          x="${centerX}" y="${y}"
+          x="${x}" y="${y}"
           fill="#000000" fill-opacity="0.5"
-          stroke="#000000" stroke-opacity="0.35"
-          stroke-width="${textStroke * 1.4}"
-          font-family="DejaVu Sans, Arial, Helvetica, sans-serif"
+          stroke="#000000" stroke-opacity="0.3"
+          stroke-width="${textStroke * 1.3}"
+          font-family="${fontFamily}"
           font-size="${fontSize}" font-weight="700"
           text-anchor="middle" dy="0.35em"
         >${text}</text>
         <text
-          x="${centerX}" y="${y}"
+          x="${x}" y="${y}"
           fill="#ffffff"
-          font-family="DejaVu Sans, Arial, Helvetica, sans-serif"
+          font-family="${fontFamily}"
           font-size="${fontSize}" font-weight="700"
           text-anchor="middle" dy="0.35em"
-        >${text}</text>
-      </g>`
-    })
-    .join('')
+        >${text}</text>`)
+    }
+    rows.push(labels.join(''))
+  }
 
+  // Translate to photo center, then rotate — keeps the whole pattern centered.
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  ${rows}
+  <g transform="translate(${cx} ${cy}) rotate(${WATERMARK_ANGLE})">
+    ${rows.join('\n')}
+  </g>
 </svg>`
 }
 
@@ -137,7 +128,7 @@ function applyAlphaOpacity(rgba, opacity) {
 }
 
 /**
- * Overlay two subtle diagonal brand watermarks.
+ * Overlay a centered diagonal repeating brand watermark.
  * Returns a raster buffer at the same pixel size (PNG). WebP encode happens after.
  *
  * @param {Buffer} inputBuffer
@@ -294,8 +285,8 @@ module.exports = {
   WATERMARK_TEXT,
   WATERMARK_OPACITY,
   WATERMARK_FONT_SIZE,
-  WATERMARK_ROW_1_POSITION,
-  WATERMARK_ROW_2_POSITION,
-  WATERMARK_LINE_WIDTH,
   WATERMARK_ANGLE,
+  WATERMARK_ROW_COUNT,
+  WATERMARK_ROW_SPACING,
+  WATERMARK_REPEAT_GAP,
 }
