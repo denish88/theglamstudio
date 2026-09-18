@@ -19,6 +19,7 @@ const {
   lookupIpLocations,
   formatLocationLabel,
 } = require('../utils/ipGeo')
+const { buildDownloadQuota, getDownloadLimitForPlan } = require('../utils/downloadLimits')
 
 function generatePassword() {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
@@ -77,6 +78,10 @@ const createUser = async (req, res, next) => {
         endDate,
         type: subType,
       },
+    }
+
+    if (userData.downloadEnabled) {
+      userData.downloadQuota = buildDownloadQuota(subType, 0)
     }
 
     let referrer = null
@@ -300,12 +305,27 @@ const toggleUserDownload = async (req, res, next) => {
     }
 
     user.downloadEnabled = !user.downloadEnabled
+    if (user.downloadEnabled) {
+      // Fresh allotment for the current plan whenever download is turned on
+      user.downloadQuota = buildDownloadQuota(user.subscription?.type, 0)
+    }
     await user.save({ validateBeforeSave: false })
+
+    const limit = user.downloadEnabled
+      ? (user.downloadQuota?.limit || getDownloadLimitForPlan(user.subscription?.type))
+      : 0
 
     ApiResponse.success(
       res,
-      { downloadEnabled: !!user.downloadEnabled },
-      user.downloadEnabled ? 'Photo download enabled' : 'Photo download disabled',
+      {
+        downloadEnabled: !!user.downloadEnabled,
+        downloadQuota: user.downloadEnabled
+          ? { used: 0, limit }
+          : user.downloadQuota,
+      },
+      user.downloadEnabled
+        ? `Photo download enabled (${limit} photos for this subscription)`
+        : 'Photo download disabled',
     )
   } catch (error) {
     next(error)

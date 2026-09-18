@@ -1,7 +1,14 @@
 const { User, Post } = require('../models')
-const { ApiError, ApiResponse, buildMediaUrl, getISTDateKey, getISTDayBounds } = require('../utils')
-
-const DAILY_PHOTO_DOWNLOAD_LIMIT = 2
+const {
+  ApiError,
+  ApiResponse,
+  buildMediaUrl,
+  getISTDayBounds,
+} = require('../utils')
+const {
+  getDownloadLimitForPlan,
+  buildDownloadQuota,
+} = require('../utils/downloadLimits')
 
 function hasActiveSubscription(user, now = new Date()) {
   const endDate = user?.subscription?.endDate
@@ -11,9 +18,20 @@ function hasActiveSubscription(user, now = new Date()) {
   return endOfExpiryDay >= now
 }
 
-function getUsedToday(user, dateKey) {
-  if (!user?.downloadQuota?.date || user.downloadQuota.date !== dateKey) return 0
-  return Number(user.downloadQuota.count) || 0
+function resolveQuota(user) {
+  const planLimit = getDownloadLimitForPlan(user?.subscription?.type)
+  const storedLimit = Number(user?.downloadQuota?.limit)
+  const limit = storedLimit > 0 ? storedLimit : planLimit
+  // Prefer new `used`; fall back to legacy daily `count` if migrating mid-flight
+  const rawUsed = user?.downloadQuota?.used
+  const used = Number.isFinite(Number(rawUsed))
+    ? Math.max(0, Number(rawUsed))
+    : Math.max(0, Number(user?.downloadQuota?.count) || 0)
+  return {
+    used: Math.min(used, limit),
+    limit,
+    remaining: Math.max(0, limit - Math.min(used, limit)),
+  }
 }
 
 function filenameFromKey(key, fallbackIndex = 0) {
@@ -22,86 +40,106 @@ function filenameFromKey(key, fallbackIndex = 0) {
 }
 
 /**
- * Consume one daily download slot. Uses classic updates (no aggregation pipeline)
- * so it works across Mongoose versions without updatePipeline.
+ * Ensure the user has a subscription-period quota document (used/limit).
+ * Migrates legacy { date, count } shape on first touch.
  */
-async function consumeDownloadSlot(userId, dateKey) {
-  const baseFilter = {
-    _id: userId,
-    deletedAt: null,
-    isActive: true,
-    downloadEnabled: true,
+async function ensureSubscriptionQuota(user) {
+  const expected = buildDownloadQuota(user.subscription?.type, resolveQuota(user).used)
+  const currentLimit = Number(user.downloadQuota?.limit)
+  const currentUsed = Number(user.downloadQuota?.used)
+
+  const needsRepair =
+    !Number.isFinite(currentLimit) ||
+    currentLimit <= 0 ||
+    !Number.isFinite(currentUsed) ||
+    user.downloadQuota?.date != null
+
+  if (!needsRepair && currentLimit === expected.limit) {
+    return user
   }
 
-  // Same calendar day — increment if under limit
-  const sameDay = await User.findOneAndUpdate(
-    {
-      ...baseFilter,
-      'downloadQuota.date': dateKey,
-      'downloadQuota.count': { $lt: DAILY_PHOTO_DOWNLOAD_LIMIT },
-    },
-    { $inc: { 'downloadQuota.count': 1 } },
-    { new: true },
+  // Keep existing used when only repairing shape; always align limit to current plan.
+  const next = buildDownloadQuota(
+    user.subscription?.type,
+    Number.isFinite(currentUsed) ? currentUsed : resolveQuota(user).used,
   )
-  if (sameDay) return sameDay
 
-  // New day (or first download ever) — reset quota to 1
-  const rolled = await User.findOneAndUpdate(
-    {
-      ...baseFilter,
-      $or: [
-        { 'downloadQuota.date': { $ne: dateKey } },
-        { 'downloadQuota.date': null },
-        { 'downloadQuota.date': { $exists: false } },
-      ],
-    },
-    {
-      $set: {
-        downloadQuota: {
-          date: dateKey,
-          count: 1,
-        },
-      },
-    },
+  const updated = await User.findByIdAndUpdate(
+    user._id,
+    { $set: { downloadQuota: next } },
     { new: true },
-  )
-  if (rolled) return rolled
+  ).select('downloadEnabled downloadQuota subscription isActive')
 
-  // Concurrent day-rollover: another request already set today's date — retry increment
+  return updated || user
+}
+
+/**
+ * Atomically consume one download from the subscription allotment.
+ */
+async function consumeDownloadSlot(userId) {
   return User.findOneAndUpdate(
     {
-      ...baseFilter,
-      'downloadQuota.date': dateKey,
-      'downloadQuota.count': { $lt: DAILY_PHOTO_DOWNLOAD_LIMIT },
+      _id: userId,
+      deletedAt: null,
+      isActive: true,
+      downloadEnabled: true,
+      $expr: {
+        $lt: [
+          { $ifNull: ['$downloadQuota.used', 0] },
+          { $ifNull: ['$downloadQuota.limit', 0] },
+        ],
+      },
     },
-    { $inc: { 'downloadQuota.count': 1 } },
+    { $inc: { 'downloadQuota.used': 1 } },
     { new: true },
-  )
+  ).select('downloadEnabled downloadQuota subscription isActive')
+}
+
+function quotaPayload(user, extras = {}) {
+  const { used, limit, remaining } = resolveQuota(user)
+  const subscriptionActive = hasActiveSubscription(user)
+  const downloadEnabled = !!user.downloadEnabled
+  const canDownload = downloadEnabled && subscriptionActive && remaining > 0
+
+  return {
+    downloadEnabled,
+    subscriptionActive,
+    canDownload,
+    limit,
+    used,
+    remaining,
+    // Backward-compatible aliases for older clients
+    usedToday: used,
+    remainingToday: remaining,
+    plan: user.subscription?.type || null,
+    ...extras,
+  }
 }
 
 const getDownloadQuota = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id)
+    let user = await User.findById(req.user._id)
       .select('downloadEnabled downloadQuota subscription isActive')
-      .lean()
 
     if (!user || !user.isActive) {
       throw ApiError.forbidden('Account is inactive')
     }
 
-    const dateKey = getISTDateKey()
-    const usedToday = getUsedToday(user, dateKey)
-    const enabled = !!user.downloadEnabled && hasActiveSubscription(user)
+    if (user.downloadEnabled) {
+      user = await ensureSubscriptionQuota(user)
+    }
 
-    ApiResponse.success(res, {
-      downloadEnabled: !!user.downloadEnabled,
-      subscriptionActive: hasActiveSubscription(user),
-      canDownload: enabled && usedToday < DAILY_PHOTO_DOWNLOAD_LIMIT,
-      limit: DAILY_PHOTO_DOWNLOAD_LIMIT,
-      usedToday: enabled ? usedToday : 0,
-      remainingToday: enabled ? Math.max(0, DAILY_PHOTO_DOWNLOAD_LIMIT - usedToday) : 0,
-      dateKey,
-    })
+    const payload = quotaPayload(user)
+    // If download is off or sub inactive, surface zeros for remaining/used display
+    if (!payload.downloadEnabled || !payload.subscriptionActive) {
+      payload.used = 0
+      payload.remaining = 0
+      payload.usedToday = 0
+      payload.remainingToday = 0
+      payload.canDownload = false
+    }
+
+    ApiResponse.success(res, payload)
   } catch (error) {
     next(error)
   }
@@ -121,7 +159,7 @@ const downloadPostPhoto = async (req, res, next) => {
       throw ApiError.badRequest('Invalid image index')
     }
 
-    const user = await User.findById(req.user._id)
+    let user = await User.findById(req.user._id)
       .select('downloadEnabled downloadQuota subscription isActive')
 
     if (!user || !user.isActive) {
@@ -136,11 +174,11 @@ const downloadPostPhoto = async (req, res, next) => {
       throw ApiError.forbidden('Active subscription required to download photos')
     }
 
-    const dateKey = getISTDateKey()
-    const usedBefore = getUsedToday(user, dateKey)
-    if (usedBefore >= DAILY_PHOTO_DOWNLOAD_LIMIT) {
+    user = await ensureSubscriptionQuota(user)
+    const before = resolveQuota(user)
+    if (before.remaining <= 0) {
       throw ApiError.tooMany(
-        `Daily download limit reached (${DAILY_PHOTO_DOWNLOAD_LIMIT} photos per day). Try again tomorrow.`,
+        `Download limit reached (${before.limit} photos for this subscription).`,
       )
     }
 
@@ -169,29 +207,30 @@ const downloadPostPhoto = async (req, res, next) => {
       throw ApiError.badRequest('Invalid photo')
     }
 
-    const updated = await consumeDownloadSlot(user._id, dateKey)
+    const updated = await consumeDownloadSlot(user._id)
     if (!updated) {
       throw ApiError.tooMany(
-        `Daily download limit reached (${DAILY_PHOTO_DOWNLOAD_LIMIT} photos per day). Try again tomorrow.`,
+        `Download limit reached (${before.limit} photos for this subscription).`,
       )
     }
 
-    const usedToday = getUsedToday(updated, dateKey)
-    const remainingToday = Math.max(0, DAILY_PHOTO_DOWNLOAD_LIMIT - usedToday)
+    const after = resolveQuota(updated)
     const baseUrl = buildMediaUrl(imageKey)
     const mediaUrl = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}proxy=1`
 
-    ApiResponse.success(res, {
-      mediaUrl,
-      filename: filenameFromKey(imageKey, imageIndex),
-      imageIndex,
-      postId: String(post._id),
-      usedToday,
-      remainingToday,
-      limit: DAILY_PHOTO_DOWNLOAD_LIMIT,
-    }, remainingToday > 0
-      ? `Download authorized. ${remainingToday} photo download(s) left today.`
-      : 'Download authorized. Daily limit reached.')
+    ApiResponse.success(
+      res,
+      {
+        mediaUrl,
+        filename: filenameFromKey(imageKey, imageIndex),
+        imageIndex,
+        postId: String(post._id),
+        ...quotaPayload(updated),
+      },
+      after.remaining > 0
+        ? `Download authorized. ${after.remaining} photo download(s) left in this subscription.`
+        : 'Download authorized. Subscription download limit reached.',
+    )
   } catch (error) {
     next(error)
   }
@@ -200,5 +239,6 @@ const downloadPostPhoto = async (req, res, next) => {
 module.exports = {
   getDownloadQuota,
   downloadPostPhoto,
-  DAILY_PHOTO_DOWNLOAD_LIMIT,
+  getDownloadLimitForPlan,
+  buildDownloadQuota,
 }

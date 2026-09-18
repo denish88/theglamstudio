@@ -112,14 +112,16 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
-    /** Special members may download up to 2 photos per IST day until subscription ends */
+    /** Special members may download a fixed photo allotment anytime until subscription ends */
     downloadEnabled: {
       type: Boolean,
       default: false,
     },
     downloadQuota: {
-      date: { type: String, default: null }, // YYYY-MM-DD in Asia/Kolkata
-      count: { type: Number, default: 0, min: 0 },
+      /** Downloads consumed in the current subscription allotment */
+      used: { type: Number, default: 0, min: 0 },
+      /** Total allowed for this subscription (e.g. 60 monthly / 120 for 3 months) */
+      limit: { type: Number, default: 0, min: 0 },
     },
     ageConsentConfirmed: {
       type: Boolean,
