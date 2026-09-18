@@ -21,6 +21,8 @@ const {
 } = require('../utils/ipGeo')
 const { buildDownloadQuota, getDownloadLimitForPlan } = require('../utils/downloadLimits')
 
+const ALLOWED_SUBSCRIPTION_TYPES = ['monthly', '3months', 'yearly']
+
 function generatePassword() {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
   let password = ''
@@ -28,6 +30,88 @@ function generatePassword() {
     password += chars.charAt(Math.floor(Math.random() * chars.length))
   }
   return password
+}
+
+/**
+ * Shared member-create logic for admin panel and open API-key clients.
+ */
+async function createMemberUser({
+  collector,
+  subscriptionType,
+  referredByKeyId,
+  downloadEnabled,
+  createdByAdmin,
+}) {
+  const collectorName = await validateCollectorName(collector)
+
+  const subType = subscriptionType || 'monthly'
+  if (!ALLOWED_SUBSCRIPTION_TYPES.includes(subType)) {
+    throw ApiError.badRequest('subscriptionType must be monthly, 3months, or yearly')
+  }
+
+  const keyId = await generateNextMemberKeyId()
+  const plainPassword = generatePassword()
+
+  const months = { monthly: 1, '3months': 3, yearly: 12 }
+  const duration = months[subType] || 1
+  const startDate = new Date()
+  const endDate = new Date()
+  endDate.setMonth(endDate.getMonth() + duration)
+
+  const enabled = downloadEnabled === true || downloadEnabled === 'true'
+
+  const userData = {
+    keyId,
+    password: plainPassword,
+    role: 'user',
+    isActive: true,
+    downloadEnabled: enabled,
+    createdByAdmin,
+    collector: collectorName,
+    subscription: {
+      startDate,
+      endDate,
+      type: subType,
+    },
+  }
+
+  if (enabled) {
+    userData.downloadQuota = buildDownloadQuota(subType, 0)
+  }
+
+  let referrer = null
+  if (referredByKeyId) {
+    referrer = await User.findOne({ keyId: normalizeKeyId(referredByKeyId), deletedAt: null })
+    if (referrer) {
+      userData.referredBy = referrer._id
+    }
+  }
+
+  const user = await User.create(userData)
+
+  if (referrer) {
+    const BONUS_DAYS = 5
+    const currentEnd = referrer.subscription?.endDate ? new Date(referrer.subscription.endDate) : new Date()
+    const baseDate = currentEnd > new Date() ? currentEnd : new Date()
+    const newEndDate = new Date(baseDate)
+    newEndDate.setDate(newEndDate.getDate() + BONUS_DAYS)
+
+    await User.findByIdAndUpdate(referrer._id, {
+      $inc: { referralCount: 1 },
+      $set: { 'subscription.endDate': newEndDate },
+    })
+  }
+
+  return {
+    keyId: user.keyId,
+    keyIdDisplay: formatMemberKeyIdDisplay(user.keyId),
+    password: plainPassword,
+    referralCode: user.referralCode,
+    subscription: user.subscription,
+    createdByAdmin: user.createdByAdmin,
+    collector: user.collector,
+    downloadEnabled: !!user.downloadEnabled,
+  }
 }
 
 const listCollectors = async (req, res, next) => {
@@ -51,72 +135,46 @@ const listCollectors = async (req, res, next) => {
 const createUser = async (req, res, next) => {
   try {
     const { subscriptionType, referredByKeyId, collector, downloadEnabled } = req.body
+    const data = await createMemberUser({
+      collector,
+      subscriptionType,
+      referredByKeyId,
+      downloadEnabled,
+      createdByAdmin: getAdminDisplayName(req.user),
+    })
+    ApiResponse.created(res, data, 'User created successfully')
+  } catch (error) {
+    next(error)
+  }
+}
 
-    const collectorName = await validateCollectorName(collector)
-    const createdByAdmin = getAdminDisplayName(req.user)
+/**
+ * Open API (API-key) create user — same result as admin create.
+ * createdByAdmin is recorded as "Open API" unless `createdBy` is provided.
+ */
+const createUserViaApiKey = async (req, res, next) => {
+  try {
+    const {
+      subscriptionType,
+      referredByKeyId,
+      collector,
+      downloadEnabled,
+      createdBy,
+    } = req.body
 
-    const keyId = await generateNextMemberKeyId()
-    const plainPassword = generatePassword()
+    const createdByAdmin = (typeof createdBy === 'string' && createdBy.trim())
+      ? createdBy.trim().slice(0, 80)
+      : 'Open API'
 
-    const subType = subscriptionType || 'monthly'
-    const months = { monthly: 1, '3months': 3, yearly: 12 }
-    const duration = months[subType] || 1
-    const startDate = new Date()
-    const endDate = new Date()
-    endDate.setMonth(endDate.getMonth() + duration)
-
-    const userData = {
-      keyId,
-      password: plainPassword,
-      role: 'user',
-      isActive: true,
-      downloadEnabled: downloadEnabled === true || downloadEnabled === 'true',
+    const data = await createMemberUser({
+      collector,
+      subscriptionType,
+      referredByKeyId,
+      downloadEnabled,
       createdByAdmin,
-      collector: collectorName,
-      subscription: {
-        startDate,
-        endDate,
-        type: subType,
-      },
-    }
+    })
 
-    if (userData.downloadEnabled) {
-      userData.downloadQuota = buildDownloadQuota(subType, 0)
-    }
-
-    let referrer = null
-    if (referredByKeyId) {
-      referrer = await User.findOne({ keyId: normalizeKeyId(referredByKeyId), deletedAt: null })
-      if (referrer) {
-        userData.referredBy = referrer._id
-      }
-    }
-
-    const user = await User.create(userData)
-
-    if (referrer) {
-      const BONUS_DAYS = 5
-      const currentEnd = referrer.subscription?.endDate ? new Date(referrer.subscription.endDate) : new Date()
-      const baseDate = currentEnd > new Date() ? currentEnd : new Date()
-      const newEndDate = new Date(baseDate)
-      newEndDate.setDate(newEndDate.getDate() + BONUS_DAYS)
-
-      await User.findByIdAndUpdate(referrer._id, {
-        $inc: { referralCount: 1 },
-        $set: { 'subscription.endDate': newEndDate },
-      })
-    }
-
-    ApiResponse.created(res, {
-      keyId: user.keyId,
-      keyIdDisplay: formatMemberKeyIdDisplay(user.keyId),
-      password: plainPassword,
-      referralCode: user.referralCode,
-      subscription: user.subscription,
-      createdByAdmin: user.createdByAdmin,
-      collector: user.collector,
-      downloadEnabled: !!user.downloadEnabled,
-    }, 'User created successfully')
+    ApiResponse.created(res, data, 'User created successfully')
   } catch (error) {
     next(error)
   }
@@ -515,6 +573,7 @@ const createPasswordResetLink = async (req, res, next) => {
 module.exports = {
   listCollectors,
   createUser,
+  createUserViaApiKey,
   listUsers,
   getUserDetail,
   getUserLocations,

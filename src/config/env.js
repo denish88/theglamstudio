@@ -28,4 +28,10 @@ module.exports = {
   R2_BUCKET: process.env.R2_BUCKET,
   /** Optional custom domain for R2 public/signed playback (e.g. https://media.yourdomain.com) */
   R2_PUBLIC_URL: process.env.R2_PUBLIC_URL || '',
+
+  /**
+   * Shared secret for the open create-user API (X-API-Key).
+   * Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   */
+  OPEN_API_KEY: process.env.OPEN_API_KEY || '',
 }

@@ -6,7 +6,7 @@ const corsOptions = {
     : CORS_ORIGIN,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Encrypted', 'X-Device-Id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Encrypted', 'X-Device-Id', 'X-API-Key'],
 }
 
 module.exports = corsOptions
