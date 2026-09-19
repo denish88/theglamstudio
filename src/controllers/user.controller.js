@@ -22,6 +22,8 @@ const {
 const { buildDownloadQuota, getDownloadLimitForPlan } = require('../utils/downloadLimits')
 
 const ALLOWED_SUBSCRIPTION_TYPES = ['monthly', '3months', 'yearly']
+const SUBSCRIPTION_MONTHS = { monthly: 1, '3months': 3, yearly: 12 }
+const PLAN_LABELS = { monthly: 'Monthly', '3months': '3 Months', yearly: 'Yearly' }
 
 function generatePassword() {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
@@ -30,6 +32,14 @@ function generatePassword() {
     password += chars.charAt(Math.floor(Math.random() * chars.length))
   }
   return password
+}
+
+/** End date = startDate + plan duration (calendar months, same as create). */
+function computeSubscriptionEndDate(startDate, subscriptionType) {
+  const duration = SUBSCRIPTION_MONTHS[subscriptionType] || 1
+  const endDate = new Date(startDate)
+  endDate.setMonth(endDate.getMonth() + duration)
+  return endDate
 }
 
 /**
@@ -52,11 +62,8 @@ async function createMemberUser({
   const keyId = await generateNextMemberKeyId()
   const plainPassword = generatePassword()
 
-  const months = { monthly: 1, '3months': 3, yearly: 12 }
-  const duration = months[subType] || 1
   const startDate = new Date()
-  const endDate = new Date()
-  endDate.setMonth(endDate.getMonth() + duration)
+  const endDate = computeSubscriptionEndDate(startDate, subType)
 
   const enabled = downloadEnabled === true || downloadEnabled === 'true'
 
@@ -435,6 +442,77 @@ const updateUserPoints = async (req, res, next) => {
 }
 
 /**
+ * Change a member's subscription plan.
+ * Keeps the existing startDate (unless a valid startDate is sent) and
+ * recalculates endDate from that start + plan duration.
+ * Download quota limit is adjusted to the new plan when download is enabled.
+ */
+const updateUserSubscription = async (req, res, next) => {
+  try {
+    const { subscriptionType, startDate: startDateInput } = req.body
+
+    if (!subscriptionType || !ALLOWED_SUBSCRIPTION_TYPES.includes(subscriptionType)) {
+      throw ApiError.badRequest('subscriptionType must be monthly, 3months, or yearly')
+    }
+
+    const user = await User.findOne({ _id: req.params.id, deletedAt: null })
+    if (!user) {
+      throw ApiError.notFound('User not found')
+    }
+
+    if (user.role === 'admin') {
+      throw ApiError.badRequest('Subscription does not apply to admin accounts')
+    }
+
+    let startDate
+    if (startDateInput) {
+      startDate = new Date(startDateInput)
+      if (Number.isNaN(startDate.getTime())) {
+        throw ApiError.badRequest('startDate must be a valid date')
+      }
+    } else if (user.subscription?.startDate) {
+      startDate = new Date(user.subscription.startDate)
+    } else {
+      startDate = new Date()
+    }
+
+    const endDate = computeSubscriptionEndDate(startDate, subscriptionType)
+
+    user.subscription = {
+      startDate,
+      endDate,
+      type: subscriptionType,
+    }
+
+    if (user.downloadEnabled) {
+      const used = user.downloadQuota?.used || 0
+      user.downloadQuota = buildDownloadQuota(subscriptionType, used)
+    }
+
+    await user.save({ validateBeforeSave: false })
+
+    const isSubActive = endDate > new Date()
+
+    ApiResponse.success(
+      res,
+      {
+        subscription: {
+          plan: PLAN_LABELS[subscriptionType] || 'Free',
+          status: isSubActive ? 'active' : 'expired',
+          startDate,
+          endDate,
+          type: subscriptionType,
+        },
+        downloadQuota: user.downloadEnabled ? user.downloadQuota : undefined,
+      },
+      `Subscription updated to ${PLAN_LABELS[subscriptionType]}`,
+    )
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
  * Collect unique login IPs for a user and resolve approximate locations.
  */
 const getUserLocations = async (req, res, next) => {
@@ -583,5 +661,6 @@ module.exports = {
   toggleUserDownload,
   deleteUser,
   updateUserPoints,
+  updateUserSubscription,
   createPasswordResetLink,
 }

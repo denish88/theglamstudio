@@ -29,6 +29,7 @@ router.get('/users/:id/referrals', userController.getReferralStats)
 router.patch('/users/:id/toggle-active', userController.toggleUserActive)
 router.patch('/users/:id/toggle-download', userController.toggleUserDownload)
 router.patch('/users/:id/points', userController.updateUserPoints)
+router.patch('/users/:id/subscription', userController.updateUserSubscription)
 router.post('/users/:id/password-reset-link', userController.createPasswordResetLink)
 router.delete('/users/:id', userController.deleteUser)
 
