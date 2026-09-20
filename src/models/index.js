@@ -10,6 +10,7 @@ const MemberKeyCounter = require('./memberKeyCounter.model')
 const PushSubscription = require('./pushSubscription.model')
 const RequestSession = require('./requestSession.model')
 const RequestSessionSettings = require('./requestSessionSettings.model')
+const DownloadEvent = require('./downloadEvent.model')
 
 module.exports = {
   User,
@@ -24,4 +25,5 @@ module.exports = {
   PushSubscription,
   RequestSession,
   RequestSessionSettings,
+  DownloadEvent,
 }

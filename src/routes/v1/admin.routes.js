@@ -9,6 +9,7 @@ const {
   storyController,
   giftBoxController,
   requestSessionController,
+  downloadHistoryController,
 } = require('../../controllers')
 const { authenticate, adminOnly, upload, uploadPostMedia, uploadTimeout } = require('../../middlewares')
 
@@ -91,5 +92,9 @@ router.put('/announcements', announcementController.saveAnnouncement)
 router.patch('/request-session/enabled', requestSessionController.setRequestSessionEnabled)
 router.patch('/request-session/:id/approve', requestSessionController.approveRequest)
 router.delete('/request-session/:id', requestSessionController.deleteRequest)
+
+// ── Download history ──
+router.get('/downloads', downloadHistoryController.listDownloadEvents)
+router.delete('/downloads/:id', downloadHistoryController.deleteDownloadEvent)
 
 module.exports = router

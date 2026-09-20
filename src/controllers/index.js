@@ -13,6 +13,7 @@ const giftBoxController = require('./giftBox.controller')
 const pushController = require('./push.controller')
 const downloadController = require('./download.controller')
 const requestSessionController = require('./requestSession.controller')
+const downloadHistoryController = require('./downloadHistory.controller')
 
 module.exports = {
   authController,
@@ -30,4 +31,5 @@ module.exports = {
   pushController,
   downloadController,
   requestSessionController,
+  downloadHistoryController,
 }

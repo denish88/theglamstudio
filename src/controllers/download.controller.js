@@ -1,4 +1,5 @@
 const { User, Post } = require('../models')
+const DownloadEvent = require('../models/downloadEvent.model')
 const {
   ApiError,
   ApiResponse,
@@ -186,7 +187,7 @@ const downloadPostPhoto = async (req, res, next) => {
       _id: postId,
       deletedAt: null,
       isActive: true,
-    }).select('mediaType imageUrl videoUrl')
+    }).select('mediaType imageUrl videoUrl caption category directory')
 
     if (!post) {
       throw ApiError.notFound('Post not found')
@@ -215,6 +216,26 @@ const downloadPostPhoto = async (req, res, next) => {
     }
 
     const after = resolveQuota(updated)
+
+    // Audit trail — do not fail the download if logging fails
+    try {
+      const caption = typeof post.caption === 'string' ? post.caption.trim().slice(0, 200) : ''
+      await DownloadEvent.create({
+        userId: user._id,
+        postId: post._id,
+        imageIndex,
+        imageKey,
+        category: typeof post.category === 'number' ? post.category : null,
+        directoryId: post.directory || null,
+        caption,
+        plan: updated.subscription?.type || user.subscription?.type || null,
+        quotaUsedAfter: after.used,
+        quotaLimit: after.limit,
+      })
+    } catch (logError) {
+      console.error('[download] failed to log DownloadEvent:', logError?.message || logError)
+    }
+
     const baseUrl = buildMediaUrl(imageKey)
     const mediaUrl = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}proxy=1`
 
