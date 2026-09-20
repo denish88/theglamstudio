@@ -205,7 +205,7 @@ const listUsers = async (req, res, next) => {
       filter.collector = req.query.collector
     }
 
-    const [users, total, statsAgg] = await Promise.all([
+    const [users, total, statsAgg, deletedCount] = await Promise.all([
       User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       User.countDocuments(filter),
       User.aggregate([
@@ -220,6 +220,7 @@ const listUsers = async (req, res, next) => {
           },
         },
       ]),
+      User.countDocuments({ deletedAt: { $ne: null } }),
     ])
 
     const totals = statsAgg[0] || { total: 0, active: 0, inactive: 0, admins: 0 }
@@ -237,6 +238,41 @@ const listUsers = async (req, res, next) => {
         active: totals.active || 0,
         inactive: totals.inactive || 0,
         admins: totals.admins || 0,
+        deleted: deletedCount || 0,
+      },
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Soft-deleted members only (trash). Sorted by deletedAt desc.
+ */
+const listDeletedUsers = async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1)
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20))
+    const skip = (page - 1) * limit
+
+    const filter = { deletedAt: { $ne: null } }
+
+    if (req.query.search) {
+      filter.keyId = { $regex: req.query.search, $options: 'i' }
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(filter).sort({ deletedAt: -1 }).skip(skip).limit(limit).lean(),
+      User.countDocuments(filter),
+    ])
+
+    ApiResponse.success(res, {
+      users,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
       },
     })
   } catch (error) {
@@ -404,11 +440,71 @@ const deleteUser = async (req, res, next) => {
       throw ApiError.notFound('User not found')
     }
 
+    if (user.role === 'admin') {
+      throw ApiError.badRequest('Admin accounts cannot be deleted')
+    }
+
     user.deletedAt = new Date()
     user.isActive = false
     await user.save({ validateBeforeSave: false })
 
-    ApiResponse.success(res, null, 'User deleted')
+    ApiResponse.success(res, null, 'User moved to Deleted users')
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Permanently remove a soft-deleted user from the database.
+ */
+const hardDeleteUser = async (req, res, next) => {
+  try {
+    const user = await User.findOne({
+      _id: req.params.id,
+      deletedAt: { $ne: null },
+    })
+
+    if (!user) {
+      throw ApiError.notFound('Deleted user not found')
+    }
+
+    if (user.role === 'admin') {
+      throw ApiError.badRequest('Admin accounts cannot be permanently deleted')
+    }
+
+    await User.deleteOne({ _id: user._id })
+
+    ApiResponse.success(res, null, 'User permanently deleted')
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Permanently remove multiple soft-deleted users.
+ * Body: { ids: string[] }
+ */
+const hardDeleteUsersBulk = async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter(Boolean) : []
+    if (ids.length === 0) {
+      throw ApiError.badRequest('Select at least one user to delete permanently')
+    }
+    if (ids.length > 100) {
+      throw ApiError.badRequest('You can permanently delete at most 100 users at once')
+    }
+
+    const result = await User.deleteMany({
+      _id: { $in: ids },
+      deletedAt: { $ne: null },
+      role: { $ne: 'admin' },
+    })
+
+    ApiResponse.success(
+      res,
+      { deletedCount: result.deletedCount || 0 },
+      `${result.deletedCount || 0} user(s) permanently deleted`,
+    )
   } catch (error) {
     next(error)
   }
@@ -653,6 +749,7 @@ module.exports = {
   createUser,
   createUserViaApiKey,
   listUsers,
+  listDeletedUsers,
   getUserDetail,
   getUserLocations,
   getReferralStats,
@@ -660,6 +757,8 @@ module.exports = {
   toggleUserActive,
   toggleUserDownload,
   deleteUser,
+  hardDeleteUser,
+  hardDeleteUsersBulk,
   updateUserPoints,
   updateUserSubscription,
   createPasswordResetLink,

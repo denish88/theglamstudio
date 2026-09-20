@@ -20,6 +20,8 @@ router.get('/activity/suspicious', activityController.getSuspiciousUsers)
 // ── User management ──
 router.post('/users', userController.createUser)
 router.get('/users/collectors', userController.listCollectors)
+router.get('/users/deleted', userController.listDeletedUsers)
+router.post('/users/hard-delete', userController.hardDeleteUsersBulk)
 router.get('/users', userController.listUsers)
 router.post('/users/check-subscriptions', userController.checkExpiredSubscriptions)
 router.get('/users/:id', userController.getUserDetail)
@@ -30,6 +32,7 @@ router.patch('/users/:id/toggle-download', userController.toggleUserDownload)
 router.patch('/users/:id/points', userController.updateUserPoints)
 router.patch('/users/:id/subscription', userController.updateUserSubscription)
 router.post('/users/:id/password-reset-link', userController.createPasswordResetLink)
+router.delete('/users/:id/permanent', userController.hardDeleteUser)
 router.delete('/users/:id', userController.deleteUser)
 
 // ── Directory management ──
