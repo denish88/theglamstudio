@@ -4,12 +4,11 @@ const {
   directoryController,
   postController,
   ratingController,
-  pollController,
   announcementController,
-  paymentHistoryController,
   activityController,
   storyController,
   giftBoxController,
+  requestSessionController,
 } = require('../../controllers')
 const { authenticate, adminOnly, upload, uploadPostMedia, uploadTimeout } = require('../../middlewares')
 
@@ -81,20 +80,13 @@ router.delete('/giftboxes', giftBoxController.deleteGiftBox)
 router.get('/ratings', ratingController.listAllRatings)
 router.delete('/ratings/:id', ratingController.deleteRating)
 
-// ── Polls ──
-router.post('/polls', pollController.createPoll)
-router.get('/polls', pollController.listPolls)
-router.get('/polls/:id/results', pollController.getPollResults)
-router.patch('/polls/:id/toggle-active', pollController.togglePollActive)
-router.delete('/polls/:id', pollController.deletePoll)
-
 // ── Announcements (single site-wide announcement) ──
 router.get('/announcements', announcementController.getAnnouncement)
 router.put('/announcements', announcementController.saveAnnouncement)
 
-// ── Payment history ──
-router.post('/payments', paymentHistoryController.createPayment)
-router.get('/payments', paymentHistoryController.listPayments)
-router.delete('/payments/:id', paymentHistoryController.deletePayment)
+// ── Request Session (name-edit chat) ──
+router.patch('/request-session/enabled', requestSessionController.setRequestSessionEnabled)
+router.patch('/request-session/:id/approve', requestSessionController.approveRequest)
+router.delete('/request-session/:id', requestSessionController.deleteRequest)
 
 module.exports = router

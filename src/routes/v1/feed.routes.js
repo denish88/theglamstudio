@@ -3,11 +3,11 @@ const {
   feedController,
   referralController,
   ratingController,
-  pollController,
   announcementController,
   storyController,
   giftBoxController,
   downloadController,
+  requestSessionController,
 } = require('../../controllers')
 const { authenticate } = require('../../middlewares')
 
@@ -33,9 +33,9 @@ router.get('/giftbox', giftBoxController.getActiveGiftBox)
 router.post('/ratings', ratingController.submitRating)
 router.get('/ratings/my', ratingController.getMyRatings)
 
-router.get('/polls', pollController.getActivePolls)
-router.post('/polls/:id/vote', pollController.votePoll)
-
 router.get('/announcements', announcementController.getActiveAnnouncement)
+
+router.get('/request-session', requestSessionController.getRequestSessionFeed)
+router.post('/request-session', requestSessionController.createRequest)
 
 module.exports = router

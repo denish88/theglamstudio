@@ -53,4 +53,41 @@ function getISTMonthBounds(date = new Date()) {
   }
 }
 
-module.exports = { getISTDayBounds, getISTMonthBounds, getISTDateKey }
+/** Weekday 0=Sun … 6=Sat in Asia/Kolkata */
+function getISTWeekday(date = new Date()) {
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    weekday: 'short',
+  }).format(date)
+  const map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+  return map[weekday] ?? 0
+}
+
+/**
+ * Next Sunday (IST calendar). If today is Sunday and includeToday is true, returns today.
+ * Otherwise returns the upcoming Sunday (never "today" when includeToday is false).
+ */
+function getNextSundayIST(date = new Date(), { includeToday = false } = {}) {
+  const weekday = getISTWeekday(date)
+  let daysAhead = (7 - weekday) % 7
+  if (daysAhead === 0 && !includeToday) daysAhead = 7
+
+  const { y, m, d } = getISTDateParts(date)
+  const noonIstMs = Date.parse(`${y}-${m}-${d}T12:00:00+05:30`)
+  const target = new Date(noonIstMs + daysAhead * 24 * 60 * 60 * 1000)
+  const parts = getISTDateParts(target)
+
+  return {
+    dateKey: parts.dateKey,
+    start: new Date(`${parts.y}-${parts.m}-${parts.d}T00:00:00+05:30`),
+    end: new Date(`${parts.y}-${parts.m}-${parts.d}T23:59:59.999+05:30`),
+  }
+}
+
+module.exports = {
+  getISTDayBounds,
+  getISTMonthBounds,
+  getISTDateKey,
+  getISTWeekday,
+  getNextSundayIST,
+}

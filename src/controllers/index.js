@@ -6,14 +6,13 @@ const feedController = require('./feed.controller')
 const referralController = require('./referral.controller')
 const mediaController = require('./media.controller')
 const ratingController = require('./rating.controller')
-const pollController = require('./poll.controller')
 const announcementController = require('./announcement.controller')
-const paymentHistoryController = require('./paymentHistory.controller')
 const activityController = require('./activity.controller')
 const storyController = require('./story.controller')
 const giftBoxController = require('./giftBox.controller')
 const pushController = require('./push.controller')
 const downloadController = require('./download.controller')
+const requestSessionController = require('./requestSession.controller')
 
 module.exports = {
   authController,
@@ -24,12 +23,11 @@ module.exports = {
   referralController,
   mediaController,
   ratingController,
-  pollController,
   announcementController,
-  paymentHistoryController,
   activityController,
   storyController,
   giftBoxController,
   pushController,
   downloadController,
+  requestSessionController,
 }
