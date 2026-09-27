@@ -204,6 +204,10 @@ const listUsers = async (req, res, next) => {
     if (req.query.collector) {
       filter.collector = req.query.collector
     }
+    const subscription = String(req.query.subscription || '')
+    if (['monthly', '3months', 'yearly'].includes(subscription)) {
+      filter['subscription.type'] = subscription
+    }
 
     const [users, total, statsAgg, deletedCount] = await Promise.all([
       User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
@@ -259,6 +263,10 @@ const listDeletedUsers = async (req, res, next) => {
 
     if (req.query.search) {
       filter.keyId = { $regex: req.query.search, $options: 'i' }
+    }
+    const subscription = String(req.query.subscription || '')
+    if (['monthly', '3months', 'yearly'].includes(subscription)) {
+      filter['subscription.type'] = subscription
     }
 
     const [users, total] = await Promise.all([
