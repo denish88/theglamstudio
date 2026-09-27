@@ -4,7 +4,7 @@ const { SESSION_KEY } = require('../models/requestSessionSettings.model')
 const { ApiResponse, ApiError } = require('../utils')
 const { getNextSundayIST, getISTWeekday, getISTDateKey } = require('../utils/date')
 
-const NAME_MAX = 40
+const NAME_MAX = 35
 const NAME_MIN = 1
 
 const SCHEDULE_COPY = {
@@ -12,9 +12,9 @@ const SCHEDULE_COPY = {
   closeHint: 'End of Sunday (EOD)',
   approvalEta: '5 to 10 days',
   memberGuide:
-    'Every Sunday the Request Session opens. You can send two edit names once per open Sunday. Session closes at end of day. Approved edits are usually ready within 5 to 10 days.',
+    'Every Sunday the Request Session opens. You can send one edit name once per open Sunday. Session closes at end of day. Approved edits are usually ready within 5 to 10 days.',
   adminGuide:
-    'Open the session on Sunday and close it at EOD. Each open starts a new window — members may submit once per window. Approve requests within about 5–10 days.',
+    'Open the session on Sunday and close it at EOD. Each open starts a new window — members may submit one name once per window. Approve requests within about 5–10 days.',
 }
 
 async function getOrCreateSettings() {
@@ -155,14 +155,14 @@ const getRequestSessionFeed = async (req, res, next) => {
 }
 
 /**
- * Member: submit two edit names — once per open Sunday window.
+ * Member: submit one edit name — once per open Sunday window.
  */
 const createRequest = async (req, res, next) => {
   try {
     const settings = await getOrCreateSettings()
     if (!settings.isEnabled) {
       throw ApiError.forbidden(
-        'Request session is closed. It opens every Sunday — you can send new names on the next open Sunday.',
+        'Request session is closed. It opens every Sunday — you can send a new name on the next open Sunday.',
       )
     }
 
@@ -175,12 +175,7 @@ const createRequest = async (req, res, next) => {
       throw ApiError.badRequest('No active session window. Ask admin to open the session.')
     }
 
-    const name1 = normalizeName(req.body?.name1, 'First name')
-    const name2 = normalizeName(req.body?.name2, 'Second name')
-
-    if (name1.toLowerCase() === name2.toLowerCase()) {
-      throw ApiError.badRequest('Please enter two different names')
-    }
+    const name1 = normalizeName(req.body?.name1, 'Name')
 
     const alreadyInWindow = await RequestSession.findOne({
       userId: req.user._id,
@@ -190,14 +185,14 @@ const createRequest = async (req, res, next) => {
 
     if (alreadyInWindow) {
       throw ApiError.badRequest(
-        'You already sent names for this Sunday’s session. You can send new names when the session opens again next Sunday.',
+        'You already sent a name for this Sunday’s session. You can send a new name when the session opens again next Sunday.',
       )
     }
 
     const created = await RequestSession.create({
       userId: req.user._id,
       name1,
-      name2,
+      name2: '',
       status: 'pending',
       sessionWindowId: windowId,
     })
@@ -254,7 +249,7 @@ const setRequestSessionEnabled = async (req, res, next) => {
         session,
       },
       isEnabled
-        ? `Request session opened (window #${settings.currentWindowId}) — members can each send once`
+        ? `Request session opened (window #${settings.currentWindowId}) — members can each send one name`
         : 'Request session closed for today — opens again next Sunday',
     )
   } catch (error) {
@@ -291,7 +286,7 @@ const approveRequest = async (req, res, next) => {
     request.status = 'approved'
     request.approvedBy = req.user._id
     request.approvedAt = new Date()
-    await request.save()
+    await request.save({ validateModifiedOnly: true })
 
     const populated = await RequestSession.findById(request._id)
       .populate('userId', 'keyId role')
@@ -323,7 +318,7 @@ const deleteRequest = async (req, res, next) => {
     }
 
     request.deletedAt = new Date()
-    await request.save()
+    await request.save({ validateModifiedOnly: true })
 
     return ApiResponse.success(res, null, 'Request removed')
   } catch (error) {

@@ -10,14 +10,15 @@ const requestSessionSchema = new mongoose.Schema(
     },
     name1: {
       type: String,
-      required: [true, 'First name is required'],
+      required: [true, 'Name is required'],
       trim: true,
-      maxlength: [40, 'Name cannot exceed 40 characters'],
+      maxlength: [35, 'Name cannot exceed 35 characters'],
     },
+    /** Older requests stored a second name. New requests leave this empty. */
     name2: {
       type: String,
-      required: [true, 'Second name is required'],
       trim: true,
+      default: '',
       maxlength: [40, 'Name cannot exceed 40 characters'],
     },
     status: {
