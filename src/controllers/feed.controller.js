@@ -216,6 +216,89 @@ const getPostStats = async (req, res, next) => {
   }
 }
 
+function serializeFeedPost(post, extras = {}) {
+  return {
+    ...post,
+    mediaType: post.mediaType || (post.videoUrl ? 'video' : 'image'),
+    imageUrl: buildMediaUrls(post.imageUrl),
+    videoUrl: post.videoUrl ? buildMediaUrl(post.videoUrl) : null,
+    ...extras,
+  }
+}
+
+/**
+ * Posts the signed-in member has liked, newest like first.
+ */
+const getLikedPosts = async (req, res, next) => {
+  try {
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 30))
+    const userId = req.user._id
+    let scanCursor = req.query.cursor || null
+
+    if (scanCursor && !mongoose.Types.ObjectId.isValid(scanCursor)) {
+      throw ApiError.badRequest('Invalid cursor')
+    }
+
+    const postsOut = []
+    let hasMore = true
+    let scanned = 0
+    const maxScan = 200
+
+    while (postsOut.length < limit && hasMore && scanned < maxScan) {
+      const remaining = limit - postsOut.length
+      const likeFilter = { user: userId }
+      if (scanCursor) likeFilter._id = { $lt: scanCursor }
+
+      const likes = await Like.find(likeFilter)
+        .sort({ _id: -1 })
+        .limit(remaining)
+        .select('post')
+        .lean()
+
+      scanned += likes.length
+      if (likes.length === 0) {
+        hasMore = false
+        break
+      }
+
+      scanCursor = likes[likes.length - 1]._id
+
+      const posts = await Post.find({
+        _id: { $in: likes.map((like) => like.post) },
+        deletedAt: null,
+        isActive: true,
+      })
+        .populate('directory', 'name')
+        .lean()
+
+      const postMap = new Map(posts.map((post) => [String(post._id), post]))
+
+      for (const like of likes) {
+        const post = postMap.get(String(like.post))
+        if (!post) continue
+        postsOut.push(serializeFeedPost(post, { isLiked: true }))
+      }
+
+      if (likes.length < remaining) hasMore = false
+    }
+
+    if (postsOut.length >= limit && scanCursor) {
+      hasMore = !!(await Like.exists({ user: userId, _id: { $lt: scanCursor } }))
+    }
+
+    ApiResponse.success(res, {
+      posts: postsOut,
+      pagination: {
+        nextCursor: hasMore ? scanCursor : null,
+        hasMore,
+        limit,
+      },
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
 const toggleLike = async (req, res, next) => {
   try {
     const userId = req.user._id
@@ -253,6 +336,7 @@ const toggleLike = async (req, res, next) => {
 module.exports = {
   getHomeFeed,
   getPosts,
+  getLikedPosts,
   getPostById,
   getPostStats,
   getDirectories,
