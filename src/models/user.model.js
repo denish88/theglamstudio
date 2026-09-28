@@ -120,7 +120,7 @@ const userSchema = new mongoose.Schema(
     downloadQuota: {
       /** Downloads consumed in the current subscription allotment */
       used: { type: Number, default: 0, min: 0 },
-      /** Total allowed for this subscription (e.g. 60 monthly / 120 for 3 months) */
+      /** Total allowed for this subscription (e.g. 60 monthly / 180 for 3 months) */
       limit: { type: Number, default: 0, min: 0 },
     },
     ageConsentConfirmed: {

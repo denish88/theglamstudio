@@ -4,7 +4,7 @@
  */
 const DOWNLOAD_LIMITS_BY_PLAN = Object.freeze({
   monthly: 60,
-  '3months': 120,
+  '3months': 180,
   yearly: 240,
 })
 

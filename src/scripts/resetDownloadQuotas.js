@@ -3,7 +3,7 @@
  *
  * Limits:
  *   monthly  → 60
- *   3months  → 120
+ *   3months  → 180
  *   yearly   → 240
  *
  * Usage:
