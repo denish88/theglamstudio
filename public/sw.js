@@ -157,9 +157,25 @@ async function fetchVapidPublicKey() {
   }
 }
 
+function apiOrigin() {
+  const host = self.location.hostname
+  if (host === 'theglamstudio.bond' || host === 'www.theglamstudio.bond') {
+    return 'https://api.theglamstudio.bond'
+  }
+  return self.location.origin
+}
+
 async function resolveApiBase() {
-  // Prefer same-origin proxy in production builds served by the API
-  return `${self.location.origin}/api/v1`
+  return `${apiOrigin()}/api/v1`
+}
+
+function mediaFetchCredentials(requestUrl) {
+  try {
+    if (new URL(requestUrl).origin !== self.location.origin) return 'include'
+  } catch {
+    // keep same-origin
+  }
+  return 'same-origin'
 }
 
 function absoluteAsset(value, origin, fallbackPath) {
@@ -197,7 +213,7 @@ async function serveMedia(request) {
 
   // Defense in depth: never cache Range responses or video files
   if (VIDEO_EXT_RE.test(url.pathname) || request.headers.has('range')) {
-    return fetch(request, { credentials: 'same-origin' })
+    return fetch(request, { credentials: mediaFetchCredentials(request.url) })
   }
 
   const cache = await caches.open(CACHE_NAME)
@@ -213,7 +229,7 @@ async function serveMedia(request) {
   }
 
   try {
-    const response = await fetch(request, { credentials: 'same-origin' })
+    const response = await fetch(request, { credentials: mediaFetchCredentials(request.url) })
 
     if (!response.ok || response.status === 206) {
       return response
@@ -234,7 +250,7 @@ async function serveMedia(request) {
 
     return response
   } catch {
-    return fetch(request, { credentials: 'same-origin' })
+    return fetch(request, { credentials: mediaFetchCredentials(request.url) })
   }
 }
 

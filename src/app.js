@@ -6,7 +6,7 @@ const cookieParser = require('cookie-parser')
 const path = require('path')
 const fs = require('fs')
 
-const { NODE_ENV, R2_ENDPOINT, R2_PUBLIC_URL } = require('./config/env')
+const { NODE_ENV, R2_ENDPOINT, R2_PUBLIC_URL, API_PUBLIC_URL } = require('./config/env')
 const corsOptions = require('./config/cors')
 const routes = require('./routes')
 const { errorHandler, cryptoMiddleware } = require('./middlewares')
@@ -22,6 +22,8 @@ function buildMediaSrcHosts() {
     'blob:',
     'https://*.r2.cloudflarestorage.com',
   ])
+
+  if (API_PUBLIC_URL) hosts.add(API_PUBLIC_URL)
 
   for (const raw of [R2_ENDPOINT, R2_PUBLIC_URL]) {
     if (!raw) continue
@@ -65,7 +67,8 @@ app.use(
           "blob:",
           "https://images.unsplash.com",
           "https://plus.unsplash.com",
-          "https://*.r2.cloudflarestorage.com"
+          "https://*.r2.cloudflarestorage.com",
+          ...(API_PUBLIC_URL ? [API_PUBLIC_URL] : []),
         ],
 
         // Videos 302 to R2 signed URLs — must allow R2 here or players stay blank on live
@@ -75,7 +78,8 @@ app.use(
           "'self'",
           "https://images.unsplash.com",
           "https://plus.unsplash.com",
-          "https://*.r2.cloudflarestorage.com"
+          "https://*.r2.cloudflarestorage.com",
+          ...(API_PUBLIC_URL ? [API_PUBLIC_URL] : []),
         ],
 
         fontSrc: [

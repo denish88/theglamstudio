@@ -15,6 +15,8 @@ module.exports = {
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
   FRONTEND_URL: process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173',
+  /** Public API origin, e.g. https://api.theglamstudio.bond (no /api path). */
+  API_PUBLIC_URL: (process.env.API_PUBLIC_URL || '').replace(/\/$/, ''),
   CRYPTO_SECRET: process.env.CRYPTO_SECRET || 'theglamclub-shared-crypto-key-2026!',
   ENABLE_ENCRYPTION: process.env.ENABLE_ENCRYPTION === 'true',
 
