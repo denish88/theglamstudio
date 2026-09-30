@@ -1,4 +1,4 @@
-const { ApiError, verifyToken } = require('../utils')
+const { ApiError, verifyToken, setMediaCookie } = require('../utils')
 const { User } = require('../models')
 
 const authenticate = async (req, res, next) => {
@@ -25,6 +25,8 @@ const authenticate = async (req, res, next) => {
     }
 
     req.user = user
+    // Refresh the media cookie on the API host so <img> can load bucket photos.
+    setMediaCookie(res, token)
     next()
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
