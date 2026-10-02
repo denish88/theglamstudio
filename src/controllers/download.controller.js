@@ -45,7 +45,6 @@ function filenameFromKey(key, fallbackIndex = 0) {
  * Migrates legacy { date, count } shape on first touch.
  */
 async function ensureSubscriptionQuota(user) {
-  const expected = buildDownloadQuota(user.subscription?.type, resolveQuota(user).used)
   const currentLimit = Number(user.downloadQuota?.limit)
   const currentUsed = Number(user.downloadQuota?.used)
 
@@ -55,11 +54,12 @@ async function ensureSubscriptionQuota(user) {
     !Number.isFinite(currentUsed) ||
     user.downloadQuota?.date != null
 
-  if (!needsRepair && currentLimit === expected.limit) {
+  // A valid used/limit pair is left alone so an admin edit is not reset to the plan default.
+  if (!needsRepair) {
     return user
   }
 
-  // Keep existing used when only repairing shape; always align limit to current plan.
+  // Repair a missing or legacy quota. New limit follows the current plan.
   const next = buildDownloadQuota(
     user.subscription?.type,
     Number.isFinite(currentUsed) ? currentUsed : resolveQuota(user).used,

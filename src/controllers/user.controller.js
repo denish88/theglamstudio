@@ -441,6 +441,80 @@ const toggleUserDownload = async (req, res, next) => {
   }
 }
 
+/**
+ * Admin: set photo-download access and the allotment (limit / already used).
+ * Does not wipe usage unless the admin sends a new used count.
+ */
+const updateUserDownload = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ _id: req.params.id, deletedAt: null })
+    if (!user) {
+      throw ApiError.notFound('User not found')
+    }
+
+    if (user.role === 'admin') {
+      throw ApiError.badRequest('Download permission does not apply to admin accounts')
+    }
+
+    if (typeof req.body?.downloadEnabled !== 'boolean') {
+      throw ApiError.badRequest('downloadEnabled is required')
+    }
+
+    const planLimit = getDownloadLimitForPlan(user.subscription?.type)
+    const currentLimit = Number(user.downloadQuota?.limit)
+    const currentUsed = Number(user.downloadQuota?.used)
+
+    const readCount = (value, label, fallback) => {
+      if (value === undefined || value === null || value === '') return fallback
+      const n = Number(value)
+      if (!Number.isInteger(n) || n < 0) {
+        throw ApiError.badRequest(`${label} must be a whole number of 0 or more`)
+      }
+      return n
+    }
+
+    let limit = readCount(
+      req.body.limit,
+      'Download limit',
+      Number.isFinite(currentLimit) && currentLimit > 0 ? currentLimit : planLimit,
+    )
+    let used = readCount(
+      req.body.used,
+      'Downloads used',
+      Number.isFinite(currentUsed) && currentUsed >= 0 ? currentUsed : 0,
+    )
+
+    if (limit > 10000) {
+      throw ApiError.badRequest('Download limit cannot exceed 10000')
+    }
+    if (req.body.downloadEnabled && limit === 0) {
+      limit = planLimit
+    }
+    if (used > limit) {
+      throw ApiError.badRequest('Downloads used cannot be higher than the limit')
+    }
+
+    user.downloadEnabled = req.body.downloadEnabled
+    user.downloadQuota = { used, limit }
+    await user.save({ validateBeforeSave: false })
+
+    const remaining = Math.max(0, limit - used)
+
+    ApiResponse.success(
+      res,
+      {
+        downloadEnabled: !!user.downloadEnabled,
+        downloadQuota: { used, limit, remaining },
+      },
+      user.downloadEnabled
+        ? `Photo download updated (${remaining} of ${limit} remaining)`
+        : 'Photo download disabled',
+    )
+  } catch (error) {
+    next(error)
+  }
+}
+
 const deleteUser = async (req, res, next) => {
   try {
     const user = await User.findOne({ _id: req.params.id, deletedAt: null })
@@ -540,6 +614,66 @@ const updateUserPoints = async (req, res, next) => {
     await user.save({ validateBeforeSave: false })
 
     ApiResponse.success(res, { points: user.points }, 'Points updated successfully')
+  } catch (error) {
+    next(error)
+  }
+}
+
+/**
+ * Start a new subscription period from now, activate the member,
+ * and apply the chosen photo-download option.
+ */
+const renewUserSubscription = async (req, res, next) => {
+  try {
+    const { subscriptionType, downloadEnabled } = req.body
+
+    if (!subscriptionType || !ALLOWED_SUBSCRIPTION_TYPES.includes(subscriptionType)) {
+      throw ApiError.badRequest('subscriptionType must be monthly, 3months, or yearly')
+    }
+    if (typeof downloadEnabled !== 'boolean') {
+      throw ApiError.badRequest('downloadEnabled is required')
+    }
+
+    const user = await User.findOne({ _id: req.params.id, deletedAt: null })
+    if (!user) {
+      throw ApiError.notFound('User not found')
+    }
+    if (user.role === 'admin') {
+      throw ApiError.badRequest('Subscription does not apply to admin accounts')
+    }
+
+    const startDate = new Date()
+    const endDate = computeSubscriptionEndDate(startDate, subscriptionType)
+
+    user.subscription = {
+      startDate,
+      endDate,
+      type: subscriptionType,
+    }
+    user.isActive = true
+    user.downloadEnabled = downloadEnabled
+    if (downloadEnabled) {
+      user.downloadQuota = buildDownloadQuota(subscriptionType, 0)
+    }
+
+    await user.save({ validateBeforeSave: false })
+
+    ApiResponse.success(
+      res,
+      {
+        isActive: true,
+        subscription: {
+          plan: PLAN_LABELS[subscriptionType] || 'Free',
+          status: 'active',
+          startDate,
+          endDate,
+          type: subscriptionType,
+        },
+        downloadEnabled: !!user.downloadEnabled,
+        downloadQuota: user.downloadQuota,
+      },
+      `Subscription renewed to ${PLAN_LABELS[subscriptionType]}`,
+    )
   } catch (error) {
     next(error)
   }
@@ -764,10 +898,12 @@ module.exports = {
   checkExpiredSubscriptions,
   toggleUserActive,
   toggleUserDownload,
+  updateUserDownload,
   deleteUser,
   hardDeleteUser,
   hardDeleteUsersBulk,
   updateUserPoints,
   updateUserSubscription,
+  renewUserSubscription,
   createPasswordResetLink,
 }
