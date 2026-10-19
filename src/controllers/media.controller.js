@@ -14,6 +14,10 @@ const CONTENT_TYPES = {
   '.webm': 'video/webm',
 }
 
+/** UUID media keys are immutable once uploaded — safe short private browser cache. */
+const IMAGE_CACHE_CONTROL = 'private, max-age=3600, immutable'
+const VIDEO_CACHE_CONTROL = 'private, no-store, no-cache, must-revalidate'
+
 function parseRange(rangeHeader, size) {
   if (!rangeHeader || typeof rangeHeader !== 'string') return null
   const match = /^bytes=(\d*)-(\d*)$/i.exec(rangeHeader.trim())
@@ -47,9 +51,79 @@ function wantsForceProxy(req) {
   return raw === '1' || raw === 'true' || raw === true
 }
 
+function isNotFoundError(err) {
+  const name = err?.name || err?.Code || err?.code
+  const status = err?.$metadata?.httpStatusCode
+  return (
+    name === 'NotFound' ||
+    name === 'NoSuchKey' ||
+    name === '404' ||
+    status === 404
+  )
+}
+
+/**
+ * Pipe R2 GetObject Body → res and free the SDK socket if the client aborts
+ * mid-transfer (otherwise keepAlive sockets stay held until process restart).
+ */
+function pipeR2Body(Body, req, res, next) {
+  if (!Body || typeof Body.pipe !== 'function') {
+    return next(ApiError.internal('Invalid media stream'))
+  }
+
+  let finished = false
+
+  const releaseSocket = () => {
+    if (finished) return
+    finished = true
+    req.off('close', onClientGone)
+    res.off('close', onClientGone)
+    res.off('finish', onComplete)
+    if (typeof Body.destroy === 'function' && !Body.destroyed) {
+      Body.destroy()
+    }
+  }
+
+  const onComplete = () => {
+    finished = true
+    req.off('close', onClientGone)
+    res.off('close', onClientGone)
+  }
+
+  const onClientGone = () => {
+    // Client navigated away / cancelled — abort R2 read so the socket returns to the pool.
+    if (!res.writableEnded) releaseSocket()
+  }
+
+  req.on('close', onClientGone)
+  res.on('close', onClientGone)
+  res.on('finish', onComplete)
+
+  Body.on('error', (err) => {
+    releaseSocket()
+    if (!res.headersSent) next(err)
+    else if (!res.destroyed) res.destroy()
+  })
+
+  Body.pipe(res)
+}
+
+function setCommonMediaHeaders(res, { contentType, isVideo, etag }) {
+  res.setHeader('Content-Type', contentType)
+  res.setHeader('Cache-Control', isVideo ? VIDEO_CACHE_CONTROL : IMAGE_CACHE_CONTROL)
+  if (etag && !isVideo) res.setHeader('ETag', etag)
+  res.setHeader('Vary', 'Cookie')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('Content-Disposition', 'inline')
+  res.setHeader('Accept-Ranges', 'bytes')
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-site')
+}
+
 /**
  * Videos: after cookie auth + anti-hotlink, 302 to a short-lived R2 signed URL
- * so bytes never pipe through Node. Photos keep streaming via the proxy.
+ * so bytes never pipe through Node. Photos stay on this proxy (no copyable
+ * signed image URL in DevTools).
  *
  * Opening /api/v1/media/videos/... in a new tab is still blocked by anti-hotlink
  * (Sec-Fetch-Dest: document). Force ?proxy=1 only for authenticated in-app downloads.
@@ -79,7 +153,7 @@ const streamMedia = async (req, res, next) => {
     if (isVideo && !wantsForceProxy(req)) {
       try {
         const signedUrl = await generateSignedVideoUrl(key)
-        res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
+        res.setHeader('Cache-Control', VIDEO_CACHE_CONTROL)
         res.setHeader('Referrer-Policy', 'no-referrer')
         // 302 so players follow to R2; subsequent Range requests hit R2 only
         return res.redirect(302, signedUrl)
@@ -88,23 +162,34 @@ const streamMedia = async (req, res, next) => {
       }
     }
 
-    const headCommand = new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key })
-    let headResult
+    const ifNoneMatch = req.headers['if-none-match']
+    const needsHead =
+      isVideo || (!isVideo && Boolean(ifNoneMatch) && !req.headers.range)
 
-    try {
-      headResult = await r2Client.send(headCommand)
-    } catch {
-      throw ApiError.notFound('Media not found')
-    }
+    let contentLength = 0
+    let etag
+    let headContentType
 
-    const contentLength = Number(headResult.ContentLength || 0)
-    const etag = headResult.ETag
-    const contentType = isVideo
-      ? (CONTENT_TYPES[ext] || headResult.ContentType || 'application/octet-stream')
-      : (headResult.ContentType || CONTENT_TYPES[ext] || 'application/octet-stream')
+    if (needsHead) {
+      try {
+        const headResult = await r2Client.send(
+          new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }),
+        )
+        contentLength = Number(headResult.ContentLength || 0)
+        etag = headResult.ETag
+        headContentType = headResult.ContentType
+      } catch (err) {
+        if (isNotFoundError(err)) throw ApiError.notFound('Media not found')
+        throw err
+      }
 
-    if (!isVideo && req.headers['if-none-match'] === etag && !req.headers.range) {
-      return res.status(304).end()
+      // Cheap 304 — HeadObject only, no GetObject body / no held stream socket.
+      if (!isVideo && ifNoneMatch === etag && !req.headers.range) {
+        if (etag) res.setHeader('ETag', etag)
+        res.setHeader('Cache-Control', IMAGE_CACHE_CONTROL)
+        res.setHeader('Vary', 'Cookie')
+        return res.status(304).end()
+      }
     }
 
     const range = isVideo ? parseRange(req.headers.range, contentLength) : null
@@ -123,37 +208,43 @@ const streamMedia = async (req, res, next) => {
       getInput.Range = `bytes=${range.start}-${range.end}`
     }
 
-    const getCommand = new GetObjectCommand(getInput)
-    const { Body, ContentLength } = await r2Client.send(getCommand)
+    let getResult
+    try {
+      getResult = await r2Client.send(new GetObjectCommand(getInput))
+    } catch (err) {
+      if (isNotFoundError(err)) throw ApiError.notFound('Media not found')
+      throw err
+    }
 
-    res.setHeader('Content-Type', contentType)
-    res.setHeader(
-      'Cache-Control',
-      isVideo ? 'private, no-store, no-cache, must-revalidate' : 'private, no-cache',
-    )
-    if (etag && !isVideo) res.setHeader('ETag', etag)
-    res.setHeader('Vary', 'Cookie')
-    res.setHeader('X-Content-Type-Options', 'nosniff')
-    res.setHeader('Content-Disposition', 'inline')
-    res.setHeader('Accept-Ranges', 'bytes')
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN')
-    res.setHeader('Cross-Origin-Resource-Policy', 'same-site')
+    const { Body, ContentLength, ContentType, ETag, ContentRange } = getResult
+
+    etag = etag || ETag
+    const resolvedLength =
+      contentLength ||
+      Number(ContentLength || 0) ||
+      0
+
+    const contentType = isVideo
+      ? CONTENT_TYPES[ext] || headContentType || ContentType || 'application/octet-stream'
+      : headContentType || ContentType || CONTENT_TYPES[ext] || 'application/octet-stream'
+
+    setCommonMediaHeaders(res, { contentType, isVideo, etag })
 
     if (range) {
       const chunkSize = range.end - range.start + 1
       res.status(206)
-      res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${contentLength}`)
+      res.setHeader(
+        'Content-Range',
+        ContentRange || `bytes ${range.start}-${range.end}/${resolvedLength}`,
+      )
       res.setHeader('Content-Length', String(ContentLength || chunkSize))
     } else {
       res.status(200)
-      res.setHeader('Content-Length', String(contentLength))
+      const length = Number(ContentLength || resolvedLength || 0)
+      if (length > 0) res.setHeader('Content-Length', String(length))
     }
 
-    Body.on('error', (err) => {
-      if (!res.headersSent) next(err)
-      else res.destroy()
-    })
-    Body.pipe(res)
+    pipeR2Body(Body, req, res, next)
   } catch (error) {
     next(error)
   }
