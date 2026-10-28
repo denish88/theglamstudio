@@ -45,11 +45,11 @@ const WATERMARK_REPEAT_GAP = 1.35
 // ── Corner "AI" mark (easy to tune) ────────────────────────────────────────
 // Top-right label so a photo can be recognized as AI-generated.
 // Drawn opaque, then faded in pixel space (same reason as the brand watermark).
-const AI_MARK_TEXT = 'AI'
+const AI_MARK_TEXT = 'AI FAKE'
 /** 0–1. See-through, but still readable on light and dark photos. */
 const AI_MARK_OPACITY = 0.5
-/** Font size as a fraction of the shorter side. */
-const AI_MARK_FONT_RATIO = 0.05
+/** Font size as a fraction of the shorter side. 20% smaller than the original AI mark. */
+const AI_MARK_FONT_RATIO = 0.04
 /** Gap between the mark and the top/right edges, as a fraction of the shorter side. */
 const AI_MARK_MARGIN_RATIO = 0.032
 
@@ -129,25 +129,26 @@ function buildWatermarkSvg(width, height) {
 
 function aiMarkLayout(width, height) {
   const minSide = Math.min(width, height)
-  let fontSize = Math.round(Math.min(96, Math.max(26, minSide * AI_MARK_FONT_RATIO)))
+  let fontSize = Math.round(Math.min(77, Math.max(21, minSide * AI_MARK_FONT_RATIO)))
   let margin = Math.round(Math.min(72, Math.max(16, minSide * AI_MARK_MARGIN_RATIO)))
 
-  const textWidth = fontSize * 1.7
+  // "AI FAKE" plus letter-spacing. Wide enough that the right-aligned text is not clipped.
+  const textWidth = fontSize * 5.6
   if (textWidth + margin * 2 > width || fontSize + margin * 2 > height) {
-    fontSize = Math.max(16, Math.floor(Math.min(width, height) * 0.16))
+    fontSize = Math.max(13, Math.floor((width - margin * 2) / 5.6))
     margin = Math.max(8, Math.round(fontSize * 0.4))
   }
 
   return {
     fontSize,
     margin,
-    badgeW: Math.ceil(fontSize * 2.15),
+    badgeW: Math.ceil(fontSize * 6.2),
     badgeH: Math.ceil(fontSize * 1.55),
   }
 }
 
 /**
- * Small top-right "AI" overlay. Black shadow under white letters so it
+ * Small top-right "AI FAKE" overlay. Black shadow under white letters so it
  * survives both light and dark backgrounds after the opacity pass.
  */
 function buildAiMarkSvg(badgeW, badgeH, fontSize) {
