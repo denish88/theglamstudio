@@ -42,6 +42,17 @@ const WATERMARK_ROW_SPACING = 0.14
  */
 const WATERMARK_REPEAT_GAP = 1.35
 
+// ── Corner "AI" mark (easy to tune) ────────────────────────────────────────
+// Top-right label so a photo can be recognized as AI-generated.
+// Drawn opaque, then faded in pixel space (same reason as the brand watermark).
+const AI_MARK_TEXT = 'AI'
+/** 0–1. See-through, but still readable on light and dark photos. */
+const AI_MARK_OPACITY = 0.5
+/** Font size as a fraction of the shorter side. */
+const AI_MARK_FONT_RATIO = 0.05
+/** Gap between the mark and the top/right edges, as a fraction of the shorter side. */
+const AI_MARK_MARGIN_RATIO = 0.032
+
 function escapeXml(value) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -116,6 +127,66 @@ function buildWatermarkSvg(width, height) {
 </svg>`
 }
 
+function aiMarkLayout(width, height) {
+  const minSide = Math.min(width, height)
+  let fontSize = Math.round(Math.min(96, Math.max(26, minSide * AI_MARK_FONT_RATIO)))
+  let margin = Math.round(Math.min(72, Math.max(16, minSide * AI_MARK_MARGIN_RATIO)))
+
+  const textWidth = fontSize * 1.7
+  if (textWidth + margin * 2 > width || fontSize + margin * 2 > height) {
+    fontSize = Math.max(16, Math.floor(Math.min(width, height) * 0.16))
+    margin = Math.max(8, Math.round(fontSize * 0.4))
+  }
+
+  return {
+    fontSize,
+    margin,
+    badgeW: Math.ceil(fontSize * 2.15),
+    badgeH: Math.ceil(fontSize * 1.55),
+  }
+}
+
+/**
+ * Small top-right "AI" overlay. Black shadow under white letters so it
+ * survives both light and dark backgrounds after the opacity pass.
+ */
+function buildAiMarkSvg(badgeW, badgeH, fontSize) {
+  const text = escapeXml(AI_MARK_TEXT)
+  const fontFamily = 'DejaVu Sans, Arial, Helvetica, sans-serif'
+  const stroke = Math.max(1, fontSize * 0.04)
+  const shadow = Math.max(1, Math.round(fontSize * 0.03))
+  const x = badgeW - fontSize * 0.08
+  const y = badgeH * 0.58
+
+  const letter = (dx, fill, strokeWidth) => `
+    <text
+      x="${x + dx}" y="${y + dx}"
+      fill="${fill}"
+      stroke="${fill}"
+      stroke-width="${strokeWidth}"
+      font-family="${fontFamily}"
+      font-size="${fontSize}"
+      font-weight="700"
+      letter-spacing="${Math.round(fontSize * 0.06)}"
+      text-anchor="end"
+    >${text}</text>`
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${badgeW}" height="${badgeH}" viewBox="0 0 ${badgeW} ${badgeH}">
+    ${letter(shadow, '#000000', stroke * 1.35)}
+    ${letter(0, '#ffffff', stroke)}
+  </svg>`
+}
+
+async function rasterOverlay(svg, width, height, density = 72) {
+  const rendered = await sharp(Buffer.from(svg), { density })
+    .resize(width, height, { fit: 'fill' })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+
+  return rendered
+}
+
 /**
  * Scale the alpha channel of an RGBA buffer in-place (opacity 0–1).
  */
@@ -144,30 +215,46 @@ async function addWatermark(inputBuffer) {
     return inputBuffer
   }
 
-  // 1) Rasterize SVG at full strength into RGBA (librsvg handles fonts/rotation here).
-  const svg = Buffer.from(buildWatermarkSvg(width, height))
-  const overlay = await sharp(svg, { density: 72 })
-    .resize(width, height, { fit: 'fill' })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true })
+  // Brand pattern: full-frame, very light.
+  const brand = await rasterOverlay(buildWatermarkSvg(width, height), width, height)
+  applyAlphaOpacity(brand.data, WATERMARK_OPACITY)
 
-  // 2) Apply opacity in pixel space so WebP/composite always see real transparency.
-  applyAlphaOpacity(overlay.data, WATERMARK_OPACITY)
+  // AI label: only the corner, stronger than the brand pattern so it stays identifiable.
+  const layout = aiMarkLayout(width, height)
+  const badge = await rasterOverlay(
+    buildAiMarkSvg(layout.badgeW, layout.badgeH, layout.fontSize),
+    layout.badgeW,
+    layout.badgeH,
+    216,
+  )
+  applyAlphaOpacity(badge.data, AI_MARK_OPACITY)
 
-  // 3) Composite over the photo.
+  const badgeTop = Math.max(0, Math.min(layout.margin, height - badge.info.height))
+  const badgeLeft = Math.max(0, width - badge.info.width - layout.margin)
+
   return sharp(inputBuffer, { failOn: 'none' })
     .ensureAlpha()
     .composite([
       {
-        input: overlay.data,
+        input: brand.data,
         raw: {
-          width: overlay.info.width,
-          height: overlay.info.height,
+          width: brand.info.width,
+          height: brand.info.height,
           channels: 4,
         },
         top: 0,
         left: 0,
+        blend: 'over',
+      },
+      {
+        input: badge.data,
+        raw: {
+          width: badge.info.width,
+          height: badge.info.height,
+          channels: 4,
+        },
+        top: badgeTop,
+        left: badgeLeft,
         blend: 'over',
       },
     ])
@@ -289,4 +376,6 @@ module.exports = {
   WATERMARK_ROW_COUNT,
   WATERMARK_ROW_SPACING,
   WATERMARK_REPEAT_GAP,
+  AI_MARK_TEXT,
+  AI_MARK_OPACITY,
 }
